@@ -8,96 +8,21 @@ import {
   goalStatus,
   totalsForDate,
   type FoodEntry,
-  type Goals,
   type MacroKey,
 } from './lib/nutrition'
 import MealFeed from './MealFeed'
 import AddFoodModal, { type NewFoodInput } from './AddFoodModal'
 import { addDays, dateToIso, isoToDate, isoWeekOf, todayIso, weekdayOf } from './lib/dates'
+import { useFoodLog } from './useFoodLog'
+import { useAuth } from './lib/useAuth'
+import { firestoreRepo, type FoodLogRepository } from './lib/foodLogRepo'
+import { db } from './lib/firebase'
+import SignInControl from './SignInControl'
 
-// Fixed date the example entries live on, decoupled from the real "today" the
-// app lands on. Anchoring the demo data to a known day keeps the seeded content
-// deterministic for tests/demos no matter what the clock says.
-const SEED_DATE = '2026-05-01'
-const SEED_WEEK = isoWeekOf(SEED_DATE)
-const SEED_WEEKDAY = weekdayOf(SEED_DATE)
-
-const DEFAULT_GOALS: Goals = {
-  calories: 2000,
-  protein: 120,
-  fat: 75,
-  carbs: 130,
-  fiber: 30,
-}
-
-// Seed entries across all three meals so the dashboard is populated on first load.
-const SEED_FOODS: FoodEntry[] = [
-  {
-    id: '1',
-    date: SEED_DATE,
-    week: SEED_WEEK,
-    weekday: SEED_WEEKDAY,
-    mealType: 'Breakfast',
-    description: 'Greek yogurt with berries & granola',
-    fat: 9,
-    carbs: 34,
-    protein: 22,
-    fiber: 5,
-    calories: 320,
-  },
-  {
-    id: '2',
-    date: SEED_DATE,
-    week: SEED_WEEK,
-    weekday: SEED_WEEKDAY,
-    mealType: 'Breakfast',
-    description: 'Black coffee',
-    fat: 0,
-    carbs: 0,
-    protein: 0,
-    fiber: 0,
-    calories: 5,
-  },
-  {
-    id: '3',
-    date: SEED_DATE,
-    week: SEED_WEEK,
-    weekday: SEED_WEEKDAY,
-    mealType: 'Lunch',
-    description: 'Grilled chicken salad',
-    fat: 18,
-    carbs: 20,
-    protein: 43,
-    fiber: 7,
-    calories: 430,
-  },
-  {
-    id: '4',
-    date: SEED_DATE,
-    week: SEED_WEEK,
-    weekday: SEED_WEEKDAY,
-    mealType: 'Dinner',
-    description: 'Salmon, quinoa & broccoli',
-    fat: 24,
-    carbs: 45,
-    protein: 40,
-    fiber: 9,
-    calories: 560,
-  },
-  {
-    id: '5',
-    date: SEED_DATE,
-    week: SEED_WEEK,
-    weekday: SEED_WEEKDAY,
-    mealType: 'Dinner',
-    description: 'Dark chocolate square',
-    fat: 7,
-    carbs: 13,
-    protein: 2,
-    fiber: 2,
-    calories: 120,
-  },
-]
+// Builds the live Firestore-backed store for a signed-in user. Module-scoped so
+// its identity is stable across renders. `db` is non-null whenever a user is
+// signed in (sign-in requires a configured Firebase app).
+const defaultMakeRepo = (uid: string): FoodLogRepository => firestoreRepo(db!, uid)
 
 const statusClasses: Record<'met' | 'unmet', string> = {
   met: 'text-emerald-600',
@@ -129,8 +54,12 @@ type DashboardProps = {
 }
 
 function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: DashboardProps = {}) {
-  const [loggedFoods, setLoggedFoods] = useState<FoodEntry[]>(SEED_FOODS)
-  const [goals, setGoals] = useState<Goals>(DEFAULT_GOALS)
+  const { user, signIn, signOut } = useAuth()
+  // Signed out → local seed/demo state; signed in → the user's synced cloud data.
+  const { entries: loggedFoods, goals, addEntry, deleteEntry, setGoals } = useFoodLog({
+    uid: user?.uid ?? null,
+    makeRepo: defaultMakeRepo,
+  })
   const [selectedDate, setSelectedDate] = useState(today)
   const [isFabOpen, setIsFabOpen] = useState(false)
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
@@ -168,7 +97,7 @@ function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: Dashboard
 
   const updateGoal = (macro: MacroKey, raw: string) => {
     const value = Number(raw)
-    setGoals((prev) => ({ ...prev, [macro]: Number.isFinite(value) ? value : 0 }))
+    setGoals({ ...goals, [macro]: Number.isFinite(value) ? value : 0 })
   }
 
   // Stamp new entries with the selected day so they show up in the day on screen.
@@ -180,11 +109,11 @@ function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: Dashboard
       weekday: weekdayOf(selectedDate),
       ...input,
     }
-    setLoggedFoods((prev) => [...prev, entry])
+    addEntry(entry)
   }
 
   const deleteFood = (id: string) => {
-    setLoggedFoods((prev) => prev.filter((f) => f.id !== id))
+    deleteEntry(id)
   }
 
   return (
@@ -195,7 +124,9 @@ function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: Dashboard
             <h1 className="text-2xl font-bold text-slate-900">Food Log</h1>
             <p className="text-sm text-slate-500">{formatDateLabel(selectedDate)}</p>
           </div>
-          <div className="relative flex items-center gap-1" ref={calendarRef}>
+          <div className="flex flex-col items-start gap-3 sm:items-end">
+            <SignInControl user={user} onSignIn={signIn} onSignOut={signOut} />
+            <div className="relative flex items-center gap-1" ref={calendarRef}>
             <button
               type="button"
               aria-label="Previous day"
@@ -251,6 +182,7 @@ function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: Dashboard
                 />
               </div>
             )}
+            </div>
           </div>
         </header>
 

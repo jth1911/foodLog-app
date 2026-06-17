@@ -51,6 +51,15 @@ export const MACRO_META: Record<MacroKey, MacroMeta> = {
 export type Totals = Record<MacroKey, number>
 export type Goals = Record<MacroKey, number>
 
+/** Starting macro goals, used signed-out and as the seed for a new user's cloud goals. */
+export const DEFAULT_GOALS: Goals = {
+  calories: 2000,
+  protein: 120,
+  fat: 75,
+  carbs: 130,
+  fiber: 30,
+}
+
 /** Sum each macro across the entries logged on `date`. */
 export function totalsForDate(foods: FoodEntry[], date: string): Totals {
   const totals: Totals = { calories: 0, protein: 0, fat: 0, carbs: 0, fiber: 0 }
