@@ -75,4 +75,17 @@ describe('Dashboard', () => {
     expect(screen.getByLabelText('Calories consumed')).toHaveTextContent('1435')
     expect(within(log).getByText('Grilled chicken salad')).toBeInTheDocument()
   })
+
+  it('ignores a cleared date input and keeps the steppers working', () => {
+    render(<Dashboard />)
+    const dateInput = screen.getByLabelText('Selected date') as HTMLInputElement
+
+    // Clearing a native date input fires onChange with an empty value.
+    fireEvent.change(dateInput, { target: { value: '' } })
+    expect(dateInput.value).toBe('2026-06-17')
+
+    // Steppers still work (no crash from an empty ISO string).
+    fireEvent.click(screen.getByRole('button', { name: 'Next day' }))
+    expect(dateInput.value).toBe('2026-06-18')
+  })
 })

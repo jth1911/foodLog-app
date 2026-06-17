@@ -152,7 +152,9 @@ function Dashboard() {
               type="date"
               aria-label="Selected date"
               value={selectedDate}
-              onChange={(e) => setSelectedDate(e.target.value)}
+              // Ignore empty values: clearing a native date input would otherwise
+              // set selectedDate to '' and break addDays/formatDateLabel.
+              onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
               className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-800 focus:border-slate-500 focus:outline-none"
             />
             <button
