@@ -81,7 +81,7 @@
   "Meat/Poultry": [
     {
       "food": "Chicken Breast (skinless)",
-      "serving_size": "3 oz (about the size of a deck of cards)",
+      "serving_size": "3 oz",
       "protein_g": "24",
       "carbs_g": "0",
       "calories_kcal": "123"
