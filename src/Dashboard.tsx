@@ -9,9 +9,11 @@ import {
   type MacroKey,
 } from './lib/nutrition'
 import MealFeed from './MealFeed'
+import { addDays } from './lib/dates'
 
-// Fixed "today" so seeded data always shows and the UI is deterministic for a mock.
-const TODAY = '2026-06-17'
+// Fixed seed date so seeded data always shows and the UI is deterministic for a mock.
+// Also the date the selector starts on and the "Today" button returns to.
+const SEED_DATE = '2026-06-17'
 
 const DEFAULT_GOALS: Goals = {
   calories: 2000,
@@ -25,7 +27,7 @@ const DEFAULT_GOALS: Goals = {
 const SEED_FOODS: FoodEntry[] = [
   {
     id: '1',
-    date: TODAY,
+    date: SEED_DATE,
     week: 25,
     weekday: 'Wednesday',
     mealType: 'Breakfast',
@@ -38,7 +40,7 @@ const SEED_FOODS: FoodEntry[] = [
   },
   {
     id: '2',
-    date: TODAY,
+    date: SEED_DATE,
     week: 25,
     weekday: 'Wednesday',
     mealType: 'Breakfast',
@@ -51,7 +53,7 @@ const SEED_FOODS: FoodEntry[] = [
   },
   {
     id: '3',
-    date: TODAY,
+    date: SEED_DATE,
     week: 25,
     weekday: 'Wednesday',
     mealType: 'Lunch',
@@ -64,7 +66,7 @@ const SEED_FOODS: FoodEntry[] = [
   },
   {
     id: '4',
-    date: TODAY,
+    date: SEED_DATE,
     week: 25,
     weekday: 'Wednesday',
     mealType: 'Dinner',
@@ -77,7 +79,7 @@ const SEED_FOODS: FoodEntry[] = [
   },
   {
     id: '5',
-    date: TODAY,
+    date: SEED_DATE,
     week: 25,
     weekday: 'Wednesday',
     mealType: 'Dinner',
@@ -95,11 +97,34 @@ const statusClasses: Record<'met' | 'unmet', string> = {
   unmet: 'text-rose-600',
 }
 
+// Human-readable label for an ISO date, formatted in UTC to match addDays.
+const dateLabelFormat = new Intl.DateTimeFormat('en-GB', {
+  weekday: 'long',
+  day: 'numeric',
+  month: 'long',
+  year: 'numeric',
+  timeZone: 'UTC',
+})
+
+function formatDateLabel(iso: string): string {
+  const [year, month, day] = iso.split('-').map(Number)
+  return dateLabelFormat.format(new Date(Date.UTC(year, month - 1, day)))
+}
+
 function Dashboard() {
   const [loggedFoods] = useState<FoodEntry[]>(SEED_FOODS)
   const [goals, setGoals] = useState<Goals>(DEFAULT_GOALS)
+  const [selectedDate, setSelectedDate] = useState(SEED_DATE)
 
-  const totals = useMemo(() => totalsForDate(loggedFoods, TODAY), [loggedFoods])
+  const totals = useMemo(
+    () => totalsForDate(loggedFoods, selectedDate),
+    [loggedFoods, selectedDate],
+  )
+
+  const foodsForDate = useMemo(
+    () => loggedFoods.filter((f) => f.date === selectedDate),
+    [loggedFoods, selectedDate],
+  )
 
   const updateGoal = (macro: MacroKey, raw: string) => {
     const value = Number(raw)
@@ -109,9 +134,45 @@ function Dashboard() {
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
       <div className="mx-auto max-w-5xl px-4 py-8">
-        <header className="mb-6">
-          <h1 className="text-2xl font-bold text-slate-900">Food Log</h1>
-          <p className="text-sm text-slate-500">Wednesday, 17 June 2026</p>
+        <header className="mb-6 flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between">
+          <div>
+            <h1 className="text-2xl font-bold text-slate-900">Food Log</h1>
+            <p className="text-sm text-slate-500">{formatDateLabel(selectedDate)}</p>
+          </div>
+          <div className="flex items-center gap-1">
+            <button
+              type="button"
+              aria-label="Previous day"
+              onClick={() => setSelectedDate((d) => addDays(d, -1))}
+              className="rounded-md border border-slate-300 px-2 py-1 text-slate-600 hover:bg-slate-100 focus:border-slate-500 focus:outline-none"
+            >
+              ‹
+            </button>
+            <input
+              type="date"
+              aria-label="Selected date"
+              value={selectedDate}
+              // Ignore empty values: clearing a native date input would otherwise
+              // set selectedDate to '' and break addDays/formatDateLabel.
+              onChange={(e) => e.target.value && setSelectedDate(e.target.value)}
+              className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-800 focus:border-slate-500 focus:outline-none"
+            />
+            <button
+              type="button"
+              aria-label="Next day"
+              onClick={() => setSelectedDate((d) => addDays(d, 1))}
+              className="rounded-md border border-slate-300 px-2 py-1 text-slate-600 hover:bg-slate-100 focus:border-slate-500 focus:outline-none"
+            >
+              ›
+            </button>
+            <button
+              type="button"
+              onClick={() => setSelectedDate(SEED_DATE)}
+              className="ml-1 rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-600 hover:bg-slate-100 focus:border-slate-500 focus:outline-none"
+            >
+              Today
+            </button>
+          </div>
         </header>
 
         <div className="flex flex-col gap-6 lg:flex-row">
@@ -147,8 +208,8 @@ function Dashboard() {
               </dl>
             </section>
 
-            {/* Food log grouped by meal */}
-            <MealFeed loggedFoods={loggedFoods} />
+            {/* Food log grouped by meal, filtered to the selected date */}
+            <MealFeed loggedFoods={foodsForDate} />
           </main>
 
           {/* Goals side panel */}
