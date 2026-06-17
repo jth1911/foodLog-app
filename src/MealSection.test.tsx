@@ -45,6 +45,24 @@ describe('MealSection', () => {
     expect(screen.queryByText(/No food logged/)).not.toBeInTheDocument()
   })
 
+  it('shows the serving and quantity for a scaled reference entry', () => {
+    const scaled: FoodEntry = {
+      ...entry,
+      id: '2',
+      description: 'Egg',
+      servingSize: '1 large',
+      quantity: 2,
+    }
+    render(<MealSection meal="Breakfast" entries={[scaled]} onDelete={() => {}} />)
+    expect(screen.getByText('Egg')).toBeInTheDocument()
+    expect(screen.getByText('2 × 1 large')).toBeInTheDocument()
+  })
+
+  it('shows no serving suffix for a plain entry', () => {
+    render(<MealSection meal="Breakfast" entries={[entry]} onDelete={() => {}} />)
+    expect(screen.queryByText(/×/)).not.toBeInTheDocument()
+  })
+
   describe('delete control', () => {
     afterEach(() => vi.restoreAllMocks())
 

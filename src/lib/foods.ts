@@ -2,6 +2,7 @@
 // Framework-free so it can be unit-tested in isolation, like nutrition.ts and dates.ts.
 
 import proteinSources from '../data/proteinSources.json'
+import { MACRO_KEYS, type MacroKey } from './nutrition'
 
 // One reference food as stored in the JSON. Macro values are strings because the
 // source data mixes integers, decimals, ranges ("100-110") and a "<1" sentinel.
@@ -33,6 +34,27 @@ export function normaliseMacro(raw: string): number {
   const lower = trimmed.includes('-') ? trimmed.split('-')[0] : trimmed
   const value = Number(lower)
   return Number.isFinite(value) ? value : 0
+}
+
+/**
+ * Round a scaled macro to one decimal place. Keeps partial servings honest
+ * (0.5 × 5 = 2.5) while killing float noise (0.1 × 3 = 0.30000000000000004).
+ */
+export function roundMacro(value: number): number {
+  return Math.round(value * 10) / 10
+}
+
+/**
+ * Scale a per-serving macro set by a quantity, e.g. "2 eggs" doubles each macro.
+ * Pure and framework-free, layered on roundMacro so partial servings stay clean.
+ */
+export function scaleMacros(
+  macros: Record<MacroKey, number>,
+  quantity: number,
+): Record<MacroKey, number> {
+  const scaled = {} as Record<MacroKey, number>
+  for (const key of MACRO_KEYS) scaled[key] = roundMacro(macros[key] * quantity)
+  return scaled
 }
 
 // The JSON keyed by category, e.g. foodCategories['Dairy/Eggs'].

@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest'
-import { foodCategories, normaliseMacro, type FoodReference } from './foods'
+import { foodCategories, normaliseMacro, roundMacro, scaleMacros, type FoodReference } from './foods'
+import { MACRO_KEYS } from './nutrition'
 
 describe('normaliseMacro', () => {
   it('parses plain integers and decimals', () => {
@@ -23,6 +24,53 @@ describe('normaliseMacro', () => {
     expect(normaliseMacro('')).toBe(0)
     expect(normaliseMacro('   ')).toBe(0)
     expect(normaliseMacro('n/a')).toBe(0)
+  })
+})
+
+describe('roundMacro', () => {
+  it('rounds to one decimal place', () => {
+    expect(roundMacro(2.5)).toBe(2.5)
+    expect(roundMacro(3)).toBe(3)
+    expect(roundMacro(2.04)).toBe(2)
+    expect(roundMacro(2.05)).toBeCloseTo(2.1)
+  })
+
+  it('kills floating-point noise', () => {
+    // 0.1 * 3 is 0.30000000000000004 without rounding.
+    expect(roundMacro(0.1 * 3)).toBe(0.3)
+  })
+})
+
+describe('scaleMacros', () => {
+  const base = { calories: 70, protein: 6, fat: 5, carbs: 1, fiber: 0 }
+
+  it('is the identity for quantity 1', () => {
+    expect(scaleMacros(base, 1)).toEqual(base)
+  })
+
+  it('doubles every macro for quantity 2', () => {
+    expect(scaleMacros(base, 2)).toEqual({
+      calories: 140,
+      protein: 12,
+      fat: 10,
+      carbs: 2,
+      fiber: 0,
+    })
+  })
+
+  it('halves for quantity 0.5, keeping non-integer results', () => {
+    expect(scaleMacros(base, 0.5)).toEqual({
+      calories: 35, // 0.5 * 70
+      protein: 3, //   0.5 * 6
+      fat: 2.5, //     0.5 * 5  → non-integer, preserved
+      carbs: 0.5, //   0.5 * 1
+      fiber: 0,
+    })
+  })
+
+  it('scales all five macro keys', () => {
+    const scaled = scaleMacros(base, 3)
+    for (const key of MACRO_KEYS) expect(scaled[key]).toBe(roundMacro(base[key] * 3))
   })
 })
 

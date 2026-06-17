@@ -1,5 +1,6 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { MACRO_KEYS, MACRO_META, MEAL_TYPES, type MealType } from './lib/nutrition'
+import { MACRO_KEYS, MACRO_META, MEAL_TYPES, type MacroKey, type MealType } from './lib/nutrition'
+import { scaleMacros } from './lib/foods'
 
 // The fields the user actually enters. The dashboard stamps id/date/week/weekday.
 export type NewFoodInput = {
@@ -10,6 +11,10 @@ export type NewFoodInput = {
   fat: number
   carbs: number
   fiber: number
+  // Set only when logging a pre-filled food with a quantity. The macros above
+  // are the scaled totals; these flow onto the FoodEntry for the log-row label.
+  servingSize?: string
+  quantity?: number
 }
 
 type AddFoodModalProps = {
@@ -50,7 +55,14 @@ function AddFoodModal({ onAdd, onClose, initialValues }: AddFoodModalProps) {
   const [description, setDescription] = useState(initialValues?.description ?? '')
   const [mealType, setMealType] = useState<MealType>(initialValues?.mealType ?? MEAL_TYPES[0])
   const [macros, setMacros] = useState(() => macrosFrom(initialValues))
+  const [quantity, setQuantity] = useState('1')
   const [error, setError] = useState<string | null>(null)
+
+  // Opened from the Foods page (a reference serving exists): the macro fields
+  // represent one serving and a quantity multiplies them. A blank FAB open has
+  // no servingSize, so the quantity UI stays hidden and macros are final.
+  const servingSize = initialValues?.servingSize
+  const isPrefilled = servingSize != null
 
   // Esc closes the modal, matching native dialog behaviour.
   useEffect(() => {
@@ -85,9 +97,39 @@ function AddFoodModal({ onAdd, onClose, initialValues }: AddFoodModalProps) {
       parsed[key] = value
     }
 
+    if (isPrefilled) {
+      const qty = Number(quantity.trim())
+      if (!Number.isFinite(qty) || qty <= 0) {
+        setError('Quantity must be a number greater than 0.')
+        return
+      }
+      onAdd({
+        description: name,
+        mealType,
+        ...scaleMacros(parsed, qty),
+        servingSize,
+        quantity: qty,
+      })
+      onClose()
+      return
+    }
+
     onAdd({ description: name, mealType, ...parsed })
     onClose()
   }
+
+  // Per-serving macros parsed leniently (blank/invalid → 0) for the live preview,
+  // then scaled by the current quantity. Only shown in pre-filled mode.
+  const previewQuantity = Number(quantity.trim())
+  const previewMacros = (() => {
+    const perServing = {} as Record<MacroKey, number>
+    for (const key of MACRO_KEYS) {
+      const value = Number(macros[key].trim())
+      perServing[key] = Number.isFinite(value) && value >= 0 ? value : 0
+    }
+    const qty = Number.isFinite(previewQuantity) && previewQuantity > 0 ? previewQuantity : 0
+    return scaleMacros(perServing, qty)
+  })()
 
   return (
     <div
@@ -142,6 +184,43 @@ function AddFoodModal({ onAdd, onClose, initialValues }: AddFoodModalProps) {
               ))}
             </select>
           </label>
+
+          {isPrefilled && (
+            <div className="rounded-md bg-slate-50 p-3">
+              <div className="flex items-end gap-3">
+                <div className="text-sm">
+                  <span className="mb-1 block font-medium text-slate-600">Serving</span>
+                  <span
+                    aria-label="Serving size"
+                    className="block rounded-md border border-slate-200 bg-white px-3 py-2 text-slate-500"
+                  >
+                    {servingSize}
+                  </span>
+                </div>
+                <label className="block text-sm">
+                  <span className="mb-1 block font-medium text-slate-600">Quantity</span>
+                  <input
+                    type="number"
+                    min="0"
+                    step="any"
+                    inputMode="decimal"
+                    aria-label="Quantity"
+                    value={quantity}
+                    onChange={(e) => setQuantity(e.target.value)}
+                    className="w-24 rounded-md border border-slate-300 px-3 py-2 text-slate-800 focus:border-slate-500 focus:outline-none"
+                  />
+                </label>
+              </div>
+              <p className="mt-2 text-xs text-slate-500" aria-label="Scaled totals">
+                Logs:{' '}
+                {MACRO_KEYS.map((key) => `${previewMacros[key]} ${MACRO_META[key].unit}`).join(' · ')}
+              </p>
+            </div>
+          )}
+
+          {isPrefilled && (
+            <p className="-mb-2 text-xs text-slate-400">Macros are per serving.</p>
+          )}
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
             {MACRO_KEYS.map((key) => {
