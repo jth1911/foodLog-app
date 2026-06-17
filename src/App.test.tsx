@@ -1,9 +1,13 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, beforeEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
 
 describe('App tab navigation', () => {
+  // The dashboard now persists to localStorage; clear it so entries added in one
+  // test don't carry into the next.
+  beforeEach(() => localStorage.clear())
+
   it('shows the Dashboard tab by default', () => {
     render(<App />)
     expect(screen.getByRole('tab', { name: 'Dashboard' })).toHaveAttribute('aria-selected', 'true')
