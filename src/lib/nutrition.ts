@@ -1,7 +1,7 @@
 // Pure, framework-free nutrition logic for the dashboard.
 // Kept separate from the component so it can be unit-tested in isolation.
 
-export type MealType = 'Breakfast' | 'Lunch' | 'Dinner'
+export type MealType = 'Breakfast' | 'Lunch' | 'Dinner' | 'Snacks'
 
 export type FoodEntry = {
   id: string
@@ -22,7 +22,7 @@ export type MacroKey = 'calories' | 'protein' | 'fat' | 'carbs' | 'fiber'
 
 export const MACRO_KEYS: MacroKey[] = ['calories', 'protein', 'fat', 'carbs', 'fiber']
 
-export const MEAL_TYPES: MealType[] = ['Breakfast', 'Lunch', 'Dinner']
+export const MEAL_TYPES: MealType[] = ['Breakfast', 'Lunch', 'Dinner', 'Snacks']
 
 // 'min'    → meet or exceed the goal (e.g. protein ≥ 120)
 // 'max'    → stay at or under the goal (e.g. fat ≤ 75, calories as a budget)
@@ -63,9 +63,9 @@ export function goalStatus(macro: MacroKey, value: number, goal: number): 'met' 
   return ok ? 'met' : 'unmet'
 }
 
-/** Bucket entries by meal type. Always returns all three meal keys. */
+/** Bucket entries by meal type. Always returns all four meal keys. */
 export function groupByMeal(foods: FoodEntry[]): Record<MealType, FoodEntry[]> {
-  const grouped: Record<MealType, FoodEntry[]> = { Breakfast: [], Lunch: [], Dinner: [] }
+  const grouped: Record<MealType, FoodEntry[]> = { Breakfast: [], Lunch: [], Dinner: [], Snacks: [] }
   for (const food of foods) grouped[food.mealType].push(food)
   return grouped
 }

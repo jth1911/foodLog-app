@@ -6,7 +6,7 @@ A simple food-tracking dashboard. Mock UI built with React, TypeScript and Tailw
 
 - **Daily summary card** — today's totals vs. goals for calories, protein, fat, carbs and fiber, colour-coded by whether each goal is met.
 - **Editable goals panel** — adjust each macro goal inline; the summary updates immediately.
-- **Meal-grouped food log** — entries grouped under Breakfast, Lunch and Dinner, with a placeholder for empty meals.
+- **Meal-grouped food log** — entries grouped under Breakfast, Lunch, Dinner and Snacks, with a friendly empty state per meal.
 
 All state is local to the component and seeded with example entries (see `src/Dashboard.tsx`). The nutrition math lives in `src/lib/nutrition.ts`.
 
@@ -31,6 +31,10 @@ npm run build    # type-check and build for production
 src/
   Dashboard.tsx        # main UI: summary card, goals panel, food log
   Dashboard.test.tsx   # component tests (rendering, totals, goal edits, grouping)
+  MealFeed.tsx         # food log container: groups entries into meal sections
+  MealFeed.test.tsx    # tests: section order, routing, empty placeholders
+  MealSection.tsx      # one meal bucket: heading, empty state, or food rows
+  MealSection.test.tsx # tests: empty state + populated rows
   lib/
     nutrition.ts       # pure logic: totals, goal status, meal grouping + types
     nutrition.test.ts  # unit tests for the logic

@@ -80,15 +80,22 @@ describe('goalStatus', () => {
 })
 
 describe('groupByMeal', () => {
-  it('buckets entries under each meal type and keeps all three keys', () => {
+  it('buckets entries under each meal type and keeps all four keys', () => {
     const foods = [
       make({ id: '1', mealType: 'Breakfast' }),
       make({ id: '2', mealType: 'Dinner' }),
       make({ id: '3', mealType: 'Breakfast' }),
+      make({ id: '4', mealType: 'Snacks' }),
     ]
     const grouped = groupByMeal(foods)
     expect(grouped.Breakfast.map((f) => f.id)).toEqual(['1', '3'])
     expect(grouped.Lunch).toEqual([])
     expect(grouped.Dinner.map((f) => f.id)).toEqual(['2'])
+    expect(grouped.Snacks.map((f) => f.id)).toEqual(['4'])
+  })
+
+  it('always returns all four meal buckets, even when empty', () => {
+    const grouped = groupByMeal([])
+    expect(Object.keys(grouped)).toEqual(['Breakfast', 'Lunch', 'Dinner', 'Snacks'])
   })
 })
