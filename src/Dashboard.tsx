@@ -112,11 +112,28 @@ function formatDateLabel(iso: string): string {
   return dateLabelFormat.format(new Date(Date.UTC(year, month - 1, day)))
 }
 
-function Dashboard() {
+type DashboardProps = {
+  // When set, the add-food modal opens pre-filled with these macros (e.g. from
+  // the Foods page). onPrefillConsumed lets the parent clear it once handled.
+  prefill?: Partial<NewFoodInput> | null
+  onPrefillConsumed?: () => void
+}
+
+function Dashboard({ prefill, onPrefillConsumed }: DashboardProps = {}) {
   const [loggedFoods, setLoggedFoods] = useState<FoodEntry[]>(SEED_FOODS)
   const [goals, setGoals] = useState<Goals>(DEFAULT_GOALS)
   const [selectedDate, setSelectedDate] = useState(SEED_DATE)
-  const [isModalOpen, setIsModalOpen] = useState(false)
+  const [isFabOpen, setIsFabOpen] = useState(false)
+
+  // The modal is open when opened via the FAB or when a pre-fill is pending
+  // (e.g. a food was picked on the Foods page) — no effect needed to sync state.
+  const isModalOpen = isFabOpen || prefill != null
+
+  // Closing always clears any pending pre-fill so the FAB next opens blank.
+  const closeModal = () => {
+    setIsFabOpen(false)
+    onPrefillConsumed?.()
+  }
 
   const totals = useMemo(
     () => totalsForDate(loggedFoods, selectedDate),
@@ -264,14 +281,14 @@ function Dashboard() {
       <button
         type="button"
         aria-label="Add food"
-        onClick={() => setIsModalOpen(true)}
+        onClick={() => setIsFabOpen(true)}
         className="fixed bottom-6 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-3xl leading-none text-white shadow-lg hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
       >
         +
       </button>
 
       {isModalOpen && (
-        <AddFoodModal onAdd={addFood} onClose={() => setIsModalOpen(false)} />
+        <AddFoodModal onAdd={addFood} onClose={closeModal} initialValues={prefill ?? undefined} />
       )}
     </div>
   )
