@@ -2,12 +2,16 @@
 // directly — it goes through a FoodLogStore, so tests can inject an in-memory
 // fake and the storage details stay isolated here.
 
-import { MACRO_KEYS, type FoodEntry, type Goals } from './nutrition'
+import { MACRO_KEYS, type FoodEntry, type GoalChange, type Goals } from './nutrition'
 
 // Versioned keys so a future shape change can migrate (or ignore) old data
 // rather than mis-reading it.
 export const ENTRIES_KEY = 'foodlog:entries:v1'
+// Legacy single-value goals key (pre-#26). Read-only now: kept only so an
+// existing install can migrate its one goal into the dated history below.
 export const GOALS_KEY = 'foodlog:goals:v1'
+// The effective-dated goal history (#26): a list of { effectiveDate, goals }.
+export const GOAL_HISTORY_KEY = 'foodlog:goalHistory:v1'
 
 /** A durable store for the single local user's food log. */
 export type FoodLogStore = {
@@ -15,8 +19,11 @@ export type FoodLogStore = {
   // stored JSON is missing/corrupt — the caller seeds defaults in that case.
   loadEntries(): FoodEntry[] | null
   saveEntries(entries: FoodEntry[]): void
-  loadGoals(): Goals | null
-  saveGoals(goals: Goals): void
+  loadGoalHistory(): GoalChange[] | null
+  saveGoalHistory(history: GoalChange[]): void
+  // Read-only access to the legacy single goal, for one-time migration into the
+  // history. Returns null when there's nothing legacy to migrate.
+  loadLegacyGoals(): Goals | null
 }
 
 // Guard against hosts without localStorage. SSR isn't a target (pure client
@@ -61,6 +68,19 @@ function isGoals(value: unknown): value is Goals {
   return MACRO_KEYS.every((key) => Number.isFinite((value as Record<string, unknown>)[key]))
 }
 
+// A stored goal history must be an array of entries, each with a string
+// effectiveDate and a well-formed goals payload; anything else falls back to a
+// seeded default rather than feeding bad shapes to goalsForDate.
+function isGoalChange(value: unknown): value is GoalChange {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const { effectiveDate, goals } = value as Record<string, unknown>
+  return typeof effectiveDate === 'string' && isGoals(goals)
+}
+
+function isGoalHistory(value: unknown): value is GoalChange[] {
+  return Array.isArray(value) && value.every(isGoalChange)
+}
+
 function saveJson(key: string, value: unknown): void {
   const storage = getStorage()
   if (!storage) return
@@ -76,6 +96,7 @@ function saveJson(key: string, value: unknown): void {
 export const localStorageStore: FoodLogStore = {
   loadEntries: () => loadJson(ENTRIES_KEY, isFoodEntryArray),
   saveEntries: (entries) => saveJson(ENTRIES_KEY, entries),
-  loadGoals: () => loadJson(GOALS_KEY, isGoals),
-  saveGoals: (goals) => saveJson(GOALS_KEY, goals),
+  loadGoalHistory: () => loadJson(GOAL_HISTORY_KEY, isGoalHistory),
+  saveGoalHistory: (history) => saveJson(GOAL_HISTORY_KEY, history),
+  loadLegacyGoals: () => loadJson(GOALS_KEY, isGoals),
 }

@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
-import Dashboard from './Dashboard'
+import Dashboard, { DashboardView } from './Dashboard'
+import { DEFAULT_GOALS, GOALS_EPOCH, type GoalChange } from './lib/nutrition'
 
 // The five seeded example entries live on this fixed day; pinning `today` to it
 // lands the dashboard on the seeded content so these assertions stay deterministic.
@@ -26,32 +27,12 @@ describe('Dashboard', () => {
     expect(screen.getByLabelText('Calories consumed')).toHaveTextContent('1435')
   })
 
-  it('reflects goal edits immediately in the summary status colour', () => {
+  it('shows the seeded default goal in the summary, read-only (no goal inputs)', () => {
     renderSeeded()
-    const proteinValue = screen.getByLabelText('Protein consumed').closest('dd')!
-    // 107 consumed < 120 goal → unmet
-    expect(proteinValue.className).toContain('rose')
-
-    fireEvent.change(screen.getByLabelText('Protein goal'), { target: { value: '100' } })
-    // 107 consumed ≥ 100 goal → met
-    expect(proteinValue.className).toContain('emerald')
-    expect(proteinValue).toHaveTextContent('/ 100')
-  })
-
-  it('lets a goal field be cleared without snapping to 0, reverting on blur', () => {
-    renderSeeded()
-    const proteinGoal = screen.getByLabelText('Protein goal') as HTMLInputElement
-
-    // Clearing keeps the field blank for free retyping rather than forcing 0.
-    fireEvent.change(proteinGoal, { target: { value: '' } })
-    expect(proteinGoal.value).toBe('')
-    // The summary still reflects the previous committed goal (120), not 0.
-    const proteinValue = screen.getByLabelText('Protein consumed').closest('dd')!
-    expect(proteinValue).toHaveTextContent('/ 120')
-
-    // Blurring while blank discards the in-progress edit and re-syncs to 120.
-    fireEvent.blur(proteinGoal)
-    expect(proteinGoal.value).toBe('120')
+    // The default-goal history resolves to protein 120; summary compares to it.
+    expect(screen.getByLabelText('Protein consumed').closest('dd')!).toHaveTextContent('/ 120')
+    // Editing moved to the Goals tab — there are no goal inputs on the dashboard.
+    expect(screen.queryByLabelText('Protein goal')).not.toBeInTheDocument()
   })
 
   it('groups food entries under the correct meal headings', () => {
@@ -214,6 +195,41 @@ describe('Dashboard', () => {
       expect(screen.queryByText('Black coffee')).not.toBeInTheDocument()
       // Black coffee was 5 kcal: 1435 - 5 = 1430.
       expect(screen.getByLabelText('Calories consumed')).toHaveTextContent('1430')
+    })
+  })
+
+  // DashboardView is the presentational form App renders with a shared store.
+  // Driving it directly lets us pin a dated goal history.
+  describe('read-only goal resolution', () => {
+    const history: GoalChange[] = [
+      { effectiveDate: GOALS_EPOCH, goals: { ...DEFAULT_GOALS, protein: 120 } },
+      { effectiveDate: '2026-05-01', goals: { ...DEFAULT_GOALS, protein: 130 } },
+    ]
+    const renderView = (today: string) =>
+      render(
+        <DashboardView
+          today={today}
+          loggedFoods={[]}
+          goalHistory={history}
+          addEntry={() => {}}
+          deleteEntry={() => {}}
+        />,
+      )
+
+    it('shows the goal in effect for the selected date', () => {
+      renderView('2026-05-01')
+      const protein = screen.getByLabelText('Protein consumed').closest('dd')!
+      expect(protein).toHaveTextContent('/ 130')
+    })
+
+    it('switches to the earlier goal when navigating before the change', () => {
+      renderView('2026-05-01')
+      const protein = screen.getByLabelText('Protein consumed').closest('dd')!
+      expect(protein).toHaveTextContent('/ 130')
+
+      // Step back across the 2026-05-01 boundary → the earlier 120 goal applies.
+      fireEvent.click(screen.getByRole('button', { name: 'Previous day' }))
+      expect(protein).toHaveTextContent('/ 120')
     })
   })
 })
