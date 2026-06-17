@@ -51,6 +51,18 @@ export const MACRO_META: Record<MacroKey, MacroMeta> = {
 export type Totals = Record<MacroKey, number>
 export type Goals = Record<MacroKey, number>
 
+// Goals are effective-dated: a goal change applies from its effective date
+// forward until the next change. The history is a list of these entries.
+export type GoalChange = {
+  effectiveDate: string // ISO `YYYY-MM-DD`
+  goals: Goals
+}
+
+// Sentinel effective date for the seeded/migrated default entry. Sorts before
+// any real date, so the default goal extends backward to the start of time and
+// every date resolves to a goal — there's never a "no goal" gap.
+export const GOALS_EPOCH = '0000-01-01'
+
 /** Starting macro goals, used to seed the log on a first-ever (empty-storage) load. */
 export const DEFAULT_GOALS: Goals = {
   calories: 2000,
@@ -58,6 +70,26 @@ export const DEFAULT_GOALS: Goals = {
   fat: 75,
   carbs: 130,
   fiber: 30,
+}
+
+/**
+ * The goal in effect on `date`: the entry with the latest effective date ≤
+ * `date`, or — for a date earlier than every entry — the earliest entry, so
+ * goals extend backward in time. Falls back to `DEFAULT_GOALS` only when the
+ * history is empty (the store guarantees ≥1 entry in practice).
+ *
+ * ISO date strings compare lexicographically, so this is a plain string scan.
+ * Sorts defensively rather than trusting callers to pass a sorted list.
+ */
+export function goalsForDate(history: GoalChange[], date: string): Goals {
+  if (history.length === 0) return DEFAULT_GOALS
+  const sorted = [...history].sort((a, b) => a.effectiveDate.localeCompare(b.effectiveDate))
+  let active = sorted[0] // earliest, so dates before the first still resolve
+  for (const entry of sorted) {
+    if (entry.effectiveDate <= date) active = entry
+    else break
+  }
+  return active.goals
 }
 
 /** Sum each macro across the entries logged on `date`. */

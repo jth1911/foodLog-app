@@ -6,9 +6,10 @@ import {
   MACRO_KEYS,
   MACRO_META,
   goalStatus,
+  goalsForDate,
   totalsForDate,
   type FoodEntry,
-  type MacroKey,
+  type GoalChange,
 } from './lib/nutrition'
 import MealFeed from './MealFeed'
 import AddFoodModal, { type NewFoodInput } from './AddFoodModal'
@@ -44,9 +45,29 @@ type DashboardProps = {
   today?: string
 }
 
-function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: DashboardProps = {}) {
-  // The log, persisted to localStorage and seeded with the demo on first run.
-  const { entries: loggedFoods, goals, addEntry, deleteEntry, setGoals } = useFoodLog()
+// The log data the dashboard renders, supplied by the owner (App) so the same
+// store instance also feeds the Goals tab — see DashboardView vs Dashboard.
+type DashboardViewProps = DashboardProps & {
+  loggedFoods: FoodEntry[]
+  goalHistory: GoalChange[]
+  addEntry: (entry: FoodEntry) => void
+  deleteEntry: (id: string) => void
+}
+
+/**
+ * Presentational dashboard: renders the day's summary and food log from the
+ * supplied data. Goals are read-only here — the active goal for the selected
+ * date is resolved from the history; editing lives on the Goals tab.
+ */
+export function DashboardView({
+  prefill,
+  onPrefillConsumed,
+  today = todayIso(),
+  loggedFoods,
+  goalHistory,
+  addEntry,
+  deleteEntry,
+}: DashboardViewProps) {
   const [selectedDate, setSelectedDate] = useState(today)
   const [isFabOpen, setIsFabOpen] = useState(false)
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
@@ -82,27 +103,12 @@ function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: Dashboard
     [loggedFoods, selectedDate],
   )
 
-  // While a goal field is being edited it tracks its raw string here so the user
-  // can clear it and retype freely; a blank or unparseable value leaves the
-  // committed goal untouched rather than silently snapping it to 0.
-  const [goalDrafts, setGoalDrafts] = useState<Partial<Record<MacroKey, string>>>({})
-
-  const updateGoal = (macro: MacroKey, raw: string) => {
-    setGoalDrafts((drafts) => ({ ...drafts, [macro]: raw }))
-    if (raw.trim() === '') return
-    const value = Number(raw)
-    if (Number.isFinite(value)) setGoals({ ...goals, [macro]: value })
-  }
-
-  // On blur, drop the draft so the field re-syncs to the committed number —
-  // discarding any blank/invalid in-progress edit.
-  const commitGoal = (macro: MacroKey) => {
-    setGoalDrafts((drafts) => {
-      const rest = { ...drafts }
-      delete rest[macro]
-      return rest
-    })
-  }
+  // The goal in effect on the viewed day, resolved from the dated history. The
+  // summary compares against this; it's edited on the Goals tab, not here.
+  const goals = useMemo(
+    () => goalsForDate(goalHistory, selectedDate),
+    [goalHistory, selectedDate],
+  )
 
   // Stamp new entries with the selected day so they show up in the day on screen.
   const addFood = (input: NewFoodInput) => {
@@ -189,7 +195,7 @@ function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: Dashboard
           </div>
         </header>
 
-        <div className="flex flex-col gap-6 lg:flex-row">
+        <div className="flex flex-col gap-6">
           {/* Main column: summary + food log */}
           <main className="flex-1 space-y-6">
             {/* Summary card */}
@@ -225,35 +231,6 @@ function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: Dashboard
             {/* Food log grouped by meal, filtered to the selected date */}
             <MealFeed loggedFoods={foodsForDate} onDelete={deleteFood} />
           </main>
-
-          {/* Goals side panel */}
-          <aside
-            aria-label="Goals"
-            className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:w-64"
-          >
-            <h2 className="mb-4 text-lg font-semibold text-slate-900">Goals</h2>
-            <div className="space-y-3">
-              {MACRO_KEYS.map((macro) => {
-                const meta = MACRO_META[macro]
-                const arrow = meta.direction === 'min' ? '≥' : '≤'
-                return (
-                  <label key={macro} className="flex items-center justify-between gap-2 text-sm">
-                    <span className="text-slate-600">
-                      {meta.label} <span className="text-slate-400">{arrow}</span>
-                    </span>
-                    <input
-                      type="number"
-                      aria-label={`${meta.label} goal`}
-                      value={goalDrafts[macro] ?? goals[macro]}
-                      onChange={(e) => updateGoal(macro, e.target.value)}
-                      onBlur={() => commitGoal(macro)}
-                      className="w-20 rounded-md border border-slate-300 px-2 py-1 text-right text-slate-800 focus:border-slate-500 focus:outline-none"
-                    />
-                  </label>
-                )
-              })}
-            </div>
-          </aside>
         </div>
       </div>
 
@@ -271,6 +248,25 @@ function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: Dashboard
         <AddFoodModal onAdd={addFood} onClose={closeModal} initialValues={prefill ?? undefined} />
       )}
     </div>
+  )
+}
+
+/**
+ * Standalone dashboard wired to its own persisted store. App renders
+ * `DashboardView` with a shared store instead, so the Goals tab and the
+ * dashboard read and write the same history; this wrapper is for using the
+ * dashboard on its own (and in its tests).
+ */
+function Dashboard(props: DashboardProps = {}) {
+  const { entries, goalHistory, addEntry, deleteEntry } = useFoodLog()
+  return (
+    <DashboardView
+      {...props}
+      loggedFoods={entries}
+      goalHistory={goalHistory}
+      addEntry={addEntry}
+      deleteEntry={deleteEntry}
+    />
   )
 }
 

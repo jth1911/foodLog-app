@@ -1,5 +1,11 @@
 import { useCallback, useEffect, useState } from 'react'
-import { DEFAULT_GOALS, type FoodEntry, type Goals } from './lib/nutrition'
+import {
+  DEFAULT_GOALS,
+  GOALS_EPOCH,
+  type FoodEntry,
+  type GoalChange,
+  type Goals,
+} from './lib/nutrition'
 import { localStorageStore, type FoodLogStore } from './lib/foodLogRepo'
 import { isoWeekOf, weekdayOf } from './lib/dates'
 
@@ -83,10 +89,29 @@ export const SEED_FOODS: FoodEntry[] = [
 
 export type FoodLog = {
   entries: FoodEntry[]
-  goals: Goals
+  // The effective-dated goal history, sorted ascending by effectiveDate. The
+  // store guarantees at least one entry, so every date resolves to a goal.
+  goalHistory: GoalChange[]
   addEntry: (entry: FoodEntry) => void
   deleteEntry: (id: string) => void
-  setGoals: (goals: Goals) => void
+  // Append (or, for an existing effective date, replace) a goal change.
+  addGoalChange: (effectiveDate: string, goals: Goals) => void
+  // Delete the change at this effective date. No-op on the last remaining entry
+  // so a date can always resolve to a real goal.
+  deleteGoalChange: (effectiveDate: string) => void
+}
+
+const byEffectiveDate = (a: GoalChange, b: GoalChange) =>
+  a.effectiveDate.localeCompare(b.effectiveDate)
+
+// Resolve the initial goal history: a stored history wins; otherwise migrate a
+// legacy single goal into one epoch-dated entry; otherwise seed the defaults.
+// Either fallback yields a non-empty history so every date resolves.
+function initialGoalHistory(store: FoodLogStore): GoalChange[] {
+  const stored = store.loadGoalHistory()
+  if (stored && stored.length > 0) return [...stored].sort(byEffectiveDate)
+  const legacy = store.loadLegacyGoals()
+  return [{ effectiveDate: GOALS_EPOCH, goals: legacy ?? DEFAULT_GOALS }]
 }
 
 /**
@@ -102,15 +127,16 @@ export type FoodLog = {
  */
 export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   const [entries, setEntries] = useState<FoodEntry[]>(() => store.loadEntries() ?? SEED_FOODS)
-  const [goals, setGoalsState] = useState<Goals>(() => store.loadGoals() ?? DEFAULT_GOALS)
+  const [goalHistory, setGoalHistory] = useState<GoalChange[]>(() => initialGoalHistory(store))
 
-  // Persist on every change, and on mount (which writes the initial seed back).
+  // Persist on every change, and on mount (which writes the initial seed/
+  // migrated history back, so a later edited-to-one state isn't re-migrated).
   useEffect(() => {
     store.saveEntries(entries)
   }, [store, entries])
   useEffect(() => {
-    store.saveGoals(goals)
-  }, [store, goals])
+    store.saveGoalHistory(goalHistory)
+  }, [store, goalHistory])
 
   const addEntry = useCallback((entry: FoodEntry) => {
     setEntries((prev) => [...prev, entry])
@@ -120,9 +146,23 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
     setEntries((prev) => prev.filter((f) => f.id !== id))
   }, [])
 
-  const setGoals = useCallback((next: Goals) => {
-    setGoalsState(next)
+  // Upsert by effective date: a change on an existing date replaces that day's
+  // goals (an "edit" is a re-add), otherwise it's inserted. Kept sorted so
+  // resolution and display order stay consistent.
+  const addGoalChange = useCallback((effectiveDate: string, goals: Goals) => {
+    setGoalHistory((prev) =>
+      [...prev.filter((e) => e.effectiveDate !== effectiveDate), { effectiveDate, goals }].sort(
+        byEffectiveDate,
+      ),
+    )
   }, [])
 
-  return { entries, goals, addEntry, deleteEntry, setGoals }
+  // Never remove the last entry — every date must still resolve to a goal.
+  const deleteGoalChange = useCallback((effectiveDate: string) => {
+    setGoalHistory((prev) =>
+      prev.length <= 1 ? prev : prev.filter((e) => e.effectiveDate !== effectiveDate),
+    )
+  }, [])
+
+  return { entries, goalHistory, addEntry, deleteEntry, addGoalChange, deleteGoalChange }
 }

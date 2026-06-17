@@ -3,8 +3,12 @@ import {
   totalsForDate,
   goalStatus,
   groupByMeal,
+  goalsForDate,
+  DEFAULT_GOALS,
   MACRO_KEYS,
   type FoodEntry,
+  type GoalChange,
+  type Goals,
 } from './nutrition'
 
 const make = (over: Partial<FoodEntry>): FoodEntry => ({
@@ -76,6 +80,36 @@ describe('goalStatus', () => {
   it('fiber (min): met when at or above goal', () => {
     expect(goalStatus('fiber', 30, 30)).toBe('met')
     expect(goalStatus('fiber', 10, 30)).toBe('unmet')
+  })
+})
+
+describe('goalsForDate', () => {
+  const g = (over: Partial<Goals>): Goals => ({ ...DEFAULT_GOALS, ...over })
+  // Two entries, deliberately out of order to prove the helper sorts defensively.
+  const history: GoalChange[] = [
+    { effectiveDate: '2026-05-01', goals: g({ protein: 130 }) },
+    { effectiveDate: '2026-01-01', goals: g({ protein: 120 }) },
+  ]
+
+  it('uses the entry whose date exactly matches', () => {
+    expect(goalsForDate(history, '2026-05-01').protein).toBe(130)
+    expect(goalsForDate(history, '2026-01-01').protein).toBe(120)
+  })
+
+  it('uses the latest entry on or before a date between two entries', () => {
+    expect(goalsForDate(history, '2026-03-15').protein).toBe(120)
+  })
+
+  it('uses the last entry for a date after every entry', () => {
+    expect(goalsForDate(history, '2026-12-31').protein).toBe(130)
+  })
+
+  it('uses the earliest entry for a date before the first entry', () => {
+    expect(goalsForDate(history, '2025-06-01').protein).toBe(120)
+  })
+
+  it('falls back to DEFAULT_GOALS for an empty history', () => {
+    expect(goalsForDate([], '2026-06-17')).toEqual(DEFAULT_GOALS)
   })
 })
 

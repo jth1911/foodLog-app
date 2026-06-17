@@ -1,19 +1,25 @@
 import { useState } from 'react'
-import Dashboard from './Dashboard'
+import { DashboardView } from './Dashboard'
 import FoodsPage from './FoodsPage'
+import GoalsPage from './GoalsPage'
+import { useFoodLog } from './useFoodLog'
 import { type NewFoodInput } from './AddFoodModal'
 
-type Tab = 'dashboard' | 'foods'
+type Tab = 'dashboard' | 'foods' | 'goals'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'foods', label: 'Foods' },
+  { id: 'goals', label: 'Goals' },
 ]
 
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard')
   // Macros handed up from the Foods page, waiting to pre-fill the add-food modal.
   const [prefill, setPrefill] = useState<Partial<NewFoodInput> | null>(null)
+  // One shared food-log store for the whole app, so the dashboard reflects goal
+  // changes made on the Goals tab (and vice versa) without a remount.
+  const foodLog = useFoodLog()
 
   // Picking a reference food jumps to the dashboard and opens the modal pre-filled.
   const handleSelectFood = (values: Partial<NewFoodInput>) => {
@@ -51,13 +57,29 @@ function App() {
         </div>
       </nav>
 
-      {/* Both panels stay mounted so the dashboard keeps its logged entries when
-          the user browses Foods; `hidden` removes the inactive one from view. */}
+      {/* All panels stay mounted so the dashboard keeps its logged entries when
+          the user browses other tabs; `hidden` removes the inactive ones from
+          view. They share one `foodLog` store, so a goal change is reflected
+          everywhere immediately. */}
       <div hidden={activeTab !== 'dashboard'}>
-        <Dashboard prefill={prefill} onPrefillConsumed={() => setPrefill(null)} />
+        <DashboardView
+          prefill={prefill}
+          onPrefillConsumed={() => setPrefill(null)}
+          loggedFoods={foodLog.entries}
+          goalHistory={foodLog.goalHistory}
+          addEntry={foodLog.addEntry}
+          deleteEntry={foodLog.deleteEntry}
+        />
       </div>
       <div hidden={activeTab !== 'foods'}>
         <FoodsPage onSelectFood={handleSelectFood} />
+      </div>
+      <div hidden={activeTab !== 'goals'}>
+        <GoalsPage
+          goalHistory={foodLog.goalHistory}
+          onAdd={foodLog.addGoalChange}
+          onDelete={foodLog.deleteGoalChange}
+        />
       </div>
     </div>
   )
