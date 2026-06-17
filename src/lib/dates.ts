@@ -12,6 +12,37 @@ export function addDays(iso: string, n: number): string {
   return dt.toISOString().slice(0, 10)
 }
 
+/**
+ * Today's date in the user's *local* timezone as an ISO `YYYY-MM-DD` string.
+ * Unlike the UTC math elsewhere in this module, "today" is a question about the
+ * local calendar day, so this reads local date parts rather than UTC ones.
+ */
+export function todayIso(): string {
+  return dateToIso(new Date())
+}
+
+/**
+ * Parse an ISO `YYYY-MM-DD` string into a *local-midnight* `Date`.
+ * DayPicker compares and renders days by their local date parts, so a
+ * local-midnight Date keeps the selected day aligned with what the user sees.
+ */
+export function isoToDate(iso: string): Date {
+  const [year, month, day] = iso.split('-').map(Number)
+  return new Date(year, month - 1, day)
+}
+
+/**
+ * Format a `Date` as an ISO `YYYY-MM-DD` string using its *local* date parts.
+ * Deliberately avoids `toISOString()`, which serialises in UTC and would shift a
+ * local-midnight Date back a day in negative-offset timezones.
+ */
+export function dateToIso(date: Date): string {
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  return `${year}-${month}-${day}`
+}
+
 const weekdayFormat = new Intl.DateTimeFormat('en-GB', {
   weekday: 'long',
   timeZone: 'UTC',
