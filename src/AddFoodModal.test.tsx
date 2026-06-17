@@ -72,6 +72,41 @@ describe('AddFoodModal', () => {
     expect(screen.getByRole('alert')).toHaveTextContent(/protein/i)
   })
 
+  it('pre-fills from initialValues and submits the (edited) entry', async () => {
+    const onAdd = vi.fn()
+    const user = userEvent.setup()
+    render(
+      <AddFoodModal
+        onAdd={onAdd}
+        onClose={() => {}}
+        initialValues={{ description: 'Egg', mealType: 'Lunch', protein: 6, carbs: 1, calories: 70 }}
+      />,
+    )
+
+    // Provided fields are pre-filled; absent fields (fat/fiber) stay blank.
+    expect(screen.getByLabelText('Food name')).toHaveValue('Egg')
+    expect(screen.getByLabelText('Meal type')).toHaveValue('Lunch')
+    expect(screen.getByLabelText('Calories')).toHaveValue(70)
+    expect(screen.getByLabelText('Protein')).toHaveValue(6)
+    expect(screen.getByLabelText('Carbs')).toHaveValue(1)
+    expect(screen.getByLabelText('Fat')).toHaveValue(null)
+    expect(screen.getByLabelText('Fiber')).toHaveValue(null)
+
+    // The user can adjust before submitting.
+    await user.type(screen.getByLabelText('Fat'), '5')
+    await user.click(screen.getByRole('button', { name: 'Add' }))
+
+    expect(onAdd).toHaveBeenCalledWith({
+      description: 'Egg',
+      mealType: 'Lunch',
+      calories: 70,
+      protein: 6,
+      fat: 5,
+      carbs: 1,
+      fiber: 0,
+    })
+  })
+
   it('cancels without adding', async () => {
     const onAdd = vi.fn()
     const onClose = vi.fn()

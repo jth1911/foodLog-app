@@ -15,6 +15,9 @@ export type NewFoodInput = {
 type AddFoodModalProps = {
   onAdd: (input: NewFoodInput) => void
   onClose: () => void
+  // Optional seed so the modal can open pre-filled (e.g. from the Foods page).
+  // Omitted fields stay blank, matching a fresh open from the FAB.
+  initialValues?: Partial<NewFoodInput>
 }
 
 // Start every numeric field blank so the form doesn't pre-fill zeros.
@@ -26,15 +29,27 @@ const emptyMacros: Record<(typeof MACRO_KEYS)[number], string> = {
   fiber: '',
 }
 
+// Turn any provided numeric macros into the string fields the form holds.
+// A field absent from initialValues stays blank rather than showing a 0.
+function macrosFrom(initial: Partial<NewFoodInput> | undefined) {
+  const macros = { ...emptyMacros }
+  if (!initial) return macros
+  for (const key of MACRO_KEYS) {
+    const value = initial[key]
+    if (value !== undefined) macros[key] = String(value)
+  }
+  return macros
+}
+
 /**
  * Presentational add-food form shown in a Tailwind overlay. Collects the
  * user-entered fields, validates them, and reports a NewFoodInput up via onAdd.
  * Owns no app state — the dashboard remains the single source of truth.
  */
-function AddFoodModal({ onAdd, onClose }: AddFoodModalProps) {
-  const [description, setDescription] = useState('')
-  const [mealType, setMealType] = useState<MealType>(MEAL_TYPES[0])
-  const [macros, setMacros] = useState(emptyMacros)
+function AddFoodModal({ onAdd, onClose, initialValues }: AddFoodModalProps) {
+  const [description, setDescription] = useState(initialValues?.description ?? '')
+  const [mealType, setMealType] = useState<MealType>(initialValues?.mealType ?? MEAL_TYPES[0])
+  const [macros, setMacros] = useState(() => macrosFrom(initialValues))
   const [error, setError] = useState<string | null>(null)
 
   // Esc closes the modal, matching native dialog behaviour.

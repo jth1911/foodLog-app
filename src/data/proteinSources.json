@@ -1,0 +1,452 @@
+{
+  "Dairy/Eggs": [
+    {
+      "food": "Cottage Cheese (low fat 2%)",
+      "serving_size": "1 cup",
+      "protein_g": "24",
+      "carbs_g": "9",
+      "calories_kcal": "180"
+    },
+    {
+      "food": "Egg",
+      "serving_size": "1 large",
+      "protein_g": "6",
+      "carbs_g": "1",
+      "calories_kcal": "70"
+    },
+    {
+      "food": "Egg whites",
+      "serving_size": "2 egg whites (~4 Tbsp)",
+      "protein_g": "6",
+      "carbs_g": "<1",
+      "calories_kcal": "34"
+    },
+    {
+      "food": "Greek yogurt (non fat, plain)",
+      "serving_size": "1 container (~150g or 2/3 cup)",
+      "protein_g": "16",
+      "carbs_g": "6",
+      "calories_kcal": "90"
+    },
+    {
+      "food": "String cheese (low fat)",
+      "serving_size": "1 stick",
+      "protein_g": "6",
+      "carbs_g": "<1",
+      "calories_kcal": "60"
+    },
+    {
+      "food": "Yogurt (non fat, plain)",
+      "serving_size": "1 container (~170g or 3/4 cup)",
+      "protein_g": "9",
+      "carbs_g": "13",
+      "calories_kcal": "95"
+    },
+    {
+      "food": "Non-fat Milk (Skim)",
+      "serving_size": "8 oz (1 cup)",
+      "protein_g": "8",
+      "carbs_g": "8-12",
+      "calories_kcal": "80-90"
+    },
+    {
+      "food": "Low-fat Milk (1%)",
+      "serving_size": "8 oz (1 cup)",
+      "protein_g": "8",
+      "carbs_g": "8-12",
+      "calories_kcal": "100-110"
+    },
+    {
+      "food": "Kefir (Plain, Low-fat, Low Sugar)",
+      "serving_size": "8 oz (1 cup)",
+      "protein_g": "8-10",
+      "carbs_g": "11-13",
+      "calories_kcal": "100-110"
+    },
+    {
+      "food": "Ultra-filtered Non-fat Milk (such as Fairlife)",
+      "serving_size": "8 oz (1 cup)",
+      "protein_g": "13-14",
+      "carbs_g": "6-7",
+      "calories_kcal": "80"
+    },
+    {
+      "food": "Ultra-filtered 2% Milk (such as Fairlife)",
+      "serving_size": "8 oz (1 cup)",
+      "protein_g": "13-14",
+      "carbs_g": "6-7",
+      "calories_kcal": "120-130"
+    }
+  ],
+  "Meat/Poultry": [
+    {
+      "food": "Chicken Breast (skinless)",
+      "serving_size": "3 oz (about the size of a deck of cards)",
+      "protein_g": "24",
+      "carbs_g": "0",
+      "calories_kcal": "123"
+    },
+    {
+      "food": "Chicken Thigh",
+      "serving_size": "3 oz",
+      "protein_g": "14",
+      "carbs_g": "0",
+      "calories_kcal": "180"
+    },
+    {
+      "food": "Ground Chicken",
+      "serving_size": "3 oz (cooked)",
+      "protein_g": "18-23",
+      "carbs_g": "0",
+      "calories_kcal": "160-180"
+    },
+    {
+      "food": "Rotisserie Chicken",
+      "serving_size": "3 oz (cooked)",
+      "protein_g": "22-23",
+      "carbs_g": "0",
+      "calories_kcal": "140-160"
+    },
+    {
+      "food": "Canned Chicken (drained)",
+      "serving_size": "3 oz (drained)",
+      "protein_g": "15-17",
+      "carbs_g": "0-1",
+      "calories_kcal": "80-90"
+    },
+    {
+      "food": "Chicken Thigh (skinless, boneless)",
+      "serving_size": "3 oz (cooked)",
+      "protein_g": "19-24",
+      "carbs_g": "0",
+      "calories_kcal": "140-160"
+    },
+    {
+      "food": "Turkey Breast (skinless)",
+      "serving_size": "3 oz",
+      "protein_g": "25",
+      "carbs_g": "0",
+      "calories_kcal": "125"
+    },
+    {
+      "food": "Ground Turkey (93% Lean)",
+      "serving_size": "3 oz (cooked)",
+      "protein_g": "22-23",
+      "carbs_g": "0",
+      "calories_kcal": "175-185"
+    },
+    {
+      "food": "90% Lean Ground Beef",
+      "serving_size": "3 oz (cooked)",
+      "protein_g": "21-22",
+      "carbs_g": "0",
+      "calories_kcal": "173-184"
+    },
+    {
+      "food": "93% Lean Ground Beef",
+      "serving_size": "3 oz (cooked)",
+      "protein_g": "22-25",
+      "carbs_g": "0",
+      "calories_kcal": "164-178"
+    },
+    {
+      "food": "Sirloin (Beef)",
+      "serving_size": "3 oz (cooked)",
+      "protein_g": "22-25",
+      "carbs_g": "0",
+      "calories_kcal": "171-175"
+    },
+    {
+      "food": "Round (Beef)",
+      "serving_size": "3 oz (cooked)",
+      "protein_g": "25-26",
+      "carbs_g": "0",
+      "calories_kcal": "134-138"
+    },
+    {
+      "food": "Ham (deli, sliced)",
+      "serving_size": "6 slices (112 g)",
+      "protein_g": "20",
+      "carbs_g": "2",
+      "calories_kcal": "120"
+    },
+    {
+      "food": "Pork Tenderloin",
+      "serving_size": "3 oz (cooked)",
+      "protein_g": "18-22",
+      "carbs_g": "0",
+      "calories_kcal": "103-122"
+    },
+    {
+      "food": "Lamb (lean)",
+      "serving_size": "3 oz",
+      "protein_g": "23",
+      "carbs_g": "0",
+      "calories_kcal": "166"
+    }
+  ],
+  "Seafood": [
+    {
+      "food": "Cod",
+      "serving_size": "3 oz (cooked)",
+      "protein_g": "19-20",
+      "carbs_g": "0",
+      "calories_kcal": "87"
+    },
+    {
+      "food": "Crab",
+      "serving_size": "3 oz",
+      "protein_g": "15",
+      "carbs_g": "0",
+      "calories_kcal": "71"
+    },
+    {
+      "food": "Halibut",
+      "serving_size": "3 oz (cooked)",
+      "protein_g": "20-22",
+      "carbs_g": "0",
+      "calories_kcal": "100"
+    },
+    {
+      "food": "Lobster",
+      "serving_size": "3 oz",
+      "protein_g": "14",
+      "carbs_g": "0",
+      "calories_kcal": "65"
+    },
+    {
+      "food": "Salmon",
+      "serving_size": "3 oz",
+      "protein_g": "19",
+      "carbs_g": "0",
+      "calories_kcal": "111"
+    },
+    {
+      "food": "Sardines (canned in oil, drained)",
+      "serving_size": "3 oz (cooked)",
+      "protein_g": "21-23",
+      "carbs_g": "0",
+      "calories_kcal": "185"
+    },
+    {
+      "food": "Scallops",
+      "serving_size": "3 oz",
+      "protein_g": "15",
+      "carbs_g": "1",
+      "calories_kcal": "80"
+    },
+    {
+      "food": "Shrimp",
+      "serving_size": "3 oz",
+      "protein_g": "20",
+      "carbs_g": "0",
+      "calories_kcal": "84"
+    },
+    {
+      "food": "Tuna",
+      "serving_size": "3 oz",
+      "protein_g": "20",
+      "carbs_g": "0",
+      "calories_kcal": "110"
+    },
+    {
+      "food": "Tuna Steak (Yellowfin)",
+      "serving_size": "3 oz (cooked)",
+      "protein_g": "25-26",
+      "carbs_g": "0",
+      "calories_kcal": "115"
+    },
+    {
+      "food": "Tilapia",
+      "serving_size": "3 oz (cooked)",
+      "protein_g": "17",
+      "carbs_g": "0",
+      "calories_kcal": "82"
+    }
+  ],
+  "Vegetables": [
+    {
+      "food": "Peas (green)",
+      "serving_size": "1/2 cup",
+      "protein_g": "4",
+      "carbs_g": "11",
+      "calories_kcal": "60"
+    },
+    {
+      "food": "Spinach (cooked)",
+      "serving_size": "1/2 cup",
+      "protein_g": "3",
+      "carbs_g": "4",
+      "calories_kcal": "25"
+    }
+  ],
+  "Legumes": [
+    {
+      "food": "Black Beans",
+      "serving_size": "1/2 cup",
+      "protein_g": "7",
+      "carbs_g": "20",
+      "calories_kcal": "113"
+    },
+    {
+      "food": "Chick Peas",
+      "serving_size": "1/2 cup",
+      "protein_g": "7",
+      "carbs_g": "22",
+      "calories_kcal": "134"
+    },
+    {
+      "food": "Edamame",
+      "serving_size": "1/2 cup",
+      "protein_g": "9",
+      "carbs_g": "7",
+      "calories_kcal": "94"
+    },
+    {
+      "food": "Lentils",
+      "serving_size": "1/2 cup",
+      "protein_g": "9",
+      "carbs_g": "19",
+      "calories_kcal": "113"
+    },
+    {
+      "food": "Tempeh",
+      "serving_size": "3 oz (cooked)",
+      "protein_g": "15-17",
+      "carbs_g": "6-9",
+      "calories_kcal": "162"
+    },
+    {
+      "food": "Tofu (firm)",
+      "serving_size": "1/2 cup (4 oz)",
+      "protein_g": "10",
+      "carbs_g": "2",
+      "calories_kcal": "80"
+    },
+    {
+      "food": "Soy milk (light)",
+      "serving_size": "1 cup",
+      "protein_g": "6",
+      "carbs_g": "9",
+      "calories_kcal": "73"
+    }
+  ],
+  "Whole Grains": [
+    {
+      "food": "Oats (rolled, dry)",
+      "serving_size": "1/2 cup",
+      "protein_g": "7",
+      "carbs_g": "29",
+      "calories_kcal": "180"
+    },
+    {
+      "food": "Brown Rice",
+      "serving_size": "1/2 cup",
+      "protein_g": "2",
+      "carbs_g": "24",
+      "calories_kcal": "114"
+    },
+    {
+      "food": "Quinoa",
+      "serving_size": "1/2 cup",
+      "protein_g": "4",
+      "carbs_g": "20",
+      "calories_kcal": "111"
+    },
+    {
+      "food": "Wheat berries (uncooked)",
+      "serving_size": "1/4 cup",
+      "protein_g": "6",
+      "carbs_g": "32",
+      "calories_kcal": "150"
+    }
+  ],
+  "Nuts/Seeds": [
+    {
+      "food": "Almonds",
+      "serving_size": "1/4 cup",
+      "protein_g": "7.5",
+      "carbs_g": "5",
+      "calories_kcal": "207"
+    },
+    {
+      "food": "Cashews",
+      "serving_size": "1/4 cup",
+      "protein_g": "7",
+      "carbs_g": "8",
+      "calories_kcal": "204"
+    },
+    {
+      "food": "Chia Seeds",
+      "serving_size": "1 tbsp",
+      "protein_g": "3",
+      "carbs_g": "5",
+      "calories_kcal": "60"
+    },
+    {
+      "food": "Flax Seed",
+      "serving_size": "1 tbsp",
+      "protein_g": "1.3",
+      "carbs_g": "2",
+      "calories_kcal": "37"
+    },
+    {
+      "food": "Peanuts",
+      "serving_size": "1/4 cup",
+      "protein_g": "9",
+      "carbs_g": "6",
+      "calories_kcal": "207"
+    },
+    {
+      "food": "Peanut Butter",
+      "serving_size": "1 Tbsp",
+      "protein_g": "4",
+      "carbs_g": "3.5",
+      "calories_kcal": "94"
+    },
+    {
+      "food": "Pistachios",
+      "serving_size": "1/4 cup",
+      "protein_g": "6",
+      "carbs_g": "8",
+      "calories_kcal": "172"
+    },
+    {
+      "food": "Pumpkin Seeds (shelled)",
+      "serving_size": "1/4 cup",
+      "protein_g": "10.5",
+      "carbs_g": "4",
+      "calories_kcal": "204"
+    },
+    {
+      "food": "Sunflower Seeds",
+      "serving_size": "1/4 cup",
+      "protein_g": "7",
+      "carbs_g": "5",
+      "calories_kcal": "209"
+    },
+    {
+      "food": "Walnuts",
+      "serving_size": "1/4 cup",
+      "protein_g": "4.5",
+      "carbs_g": "4",
+      "calories_kcal": "196"
+    }
+  ],
+  "Other": [
+    {
+      "food": "Nutritional Yeast",
+      "serving_size": "1 tbsp",
+      "protein_g": "3-5",
+      "carbs_g": "2-3",
+      "calories_kcal": "20-35"
+    },
+    {
+      "food": "Textured Vegetable Protein (TVP)",
+      "serving_size": "3 oz (cooked/rehydrated)",
+      "protein_g": "12-18",
+      "carbs_g": "7-10",
+      "calories_kcal": "90-120"
+    }
+  ]
+}
