@@ -2,7 +2,7 @@
 // directly — it goes through a FoodLogStore, so tests can inject an in-memory
 // fake and the storage details stay isolated here.
 
-import { type FoodEntry, type Goals } from './nutrition'
+import { MACRO_KEYS, type FoodEntry, type Goals } from './nutrition'
 
 // Versioned keys so a future shape change can migrate (or ignore) old data
 // rather than mis-reading it.
@@ -29,17 +29,36 @@ function getStorage(): Storage | null {
   }
 }
 
-function loadJson<T>(key: string): T | null {
+// Read and validate a stored value. `isValid` rejects not just unparseable JSON
+// but also valid JSON of the wrong shape (e.g. a tampered key holding a non-array
+// where entries are expected), so a bad value falls back to seed/defaults instead
+// of crashing a consumer like Dashboard's `entries.filter(...)`.
+function loadJson<T>(key: string, isValid: (value: unknown) => value is T): T | null {
   const storage = getStorage()
   if (!storage) return null
   const raw = storage.getItem(key)
   if (raw == null) return null
   try {
-    return JSON.parse(raw) as T
+    const parsed: unknown = JSON.parse(raw)
+    return isValid(parsed) ? parsed : null
   } catch {
     // Corrupt JSON: treat as absent so the caller falls back to seed/defaults.
     return null
   }
+}
+
+// Stored entries must be an array to be safe to iterate/filter; we don't deep-
+// validate each element, as malformed individual entries only skew totals rather
+// than crash.
+function isFoodEntryArray(value: unknown): value is FoodEntry[] {
+  return Array.isArray(value)
+}
+
+// Stored goals must be a plain object carrying every macro as a finite number;
+// anything else (array, null, missing/NaN macro) falls back to the defaults.
+function isGoals(value: unknown): value is Goals {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  return MACRO_KEYS.every((key) => Number.isFinite((value as Record<string, unknown>)[key]))
 }
 
 function saveJson(key: string, value: unknown): void {
@@ -55,8 +74,8 @@ function saveJson(key: string, value: unknown): void {
 
 /** The real store, backed by the browser's localStorage. */
 export const localStorageStore: FoodLogStore = {
-  loadEntries: () => loadJson<FoodEntry[]>(ENTRIES_KEY),
+  loadEntries: () => loadJson(ENTRIES_KEY, isFoodEntryArray),
   saveEntries: (entries) => saveJson(ENTRIES_KEY, entries),
-  loadGoals: () => loadJson<Goals>(GOALS_KEY),
+  loadGoals: () => loadJson(GOALS_KEY, isGoals),
   saveGoals: (goals) => saveJson(GOALS_KEY, goals),
 }

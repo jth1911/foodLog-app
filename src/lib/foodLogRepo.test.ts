@@ -55,4 +55,27 @@ describe('localStorageStore', () => {
     expect(localStorageStore.loadEntries()).toBeNull()
     expect(localStorageStore.loadGoals()).toBeNull()
   })
+
+  it('rejects valid JSON of the wrong shape for entries (non-array → null)', () => {
+    // Tampered/legacy values that parse fine but would crash entries.filter(...).
+    for (const bad of ['{}', '42', '"a string"', 'null', 'true']) {
+      localStorage.setItem(ENTRIES_KEY, bad)
+      expect(localStorageStore.loadEntries()).toBeNull()
+    }
+  })
+
+  it('rejects valid JSON of the wrong shape for goals', () => {
+    // Non-object, array, and objects missing/with non-numeric macros all fail.
+    localStorage.setItem(GOALS_KEY, '[]')
+    expect(localStorageStore.loadGoals()).toBeNull()
+    localStorage.setItem(GOALS_KEY, JSON.stringify({ calories: 2000 }))
+    expect(localStorageStore.loadGoals()).toBeNull()
+    localStorage.setItem(GOALS_KEY, JSON.stringify({ ...DEFAULT_GOALS, protein: 'lots' }))
+    expect(localStorageStore.loadGoals()).toBeNull()
+  })
+
+  it('accepts a well-formed goals object', () => {
+    localStorage.setItem(GOALS_KEY, JSON.stringify(DEFAULT_GOALS))
+    expect(localStorageStore.loadGoals()).toEqual(DEFAULT_GOALS)
+  })
 })
