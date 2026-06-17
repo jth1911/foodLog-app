@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { addDays, weekdayOf, isoWeekOf } from './dates'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { addDays, weekdayOf, isoWeekOf, todayIso, isoToDate, dateToIso } from './dates'
 
 describe('addDays', () => {
   it('moves forward and backward by one day', () => {
@@ -65,5 +65,45 @@ describe('isoWeekOf', () => {
   it('assigns late-December days to the next ISO year', () => {
     // 2024-12-30 is a Monday → belongs to 2025 week 1.
     expect(isoWeekOf('2024-12-30')).toBe(1)
+  })
+})
+
+describe('todayIso', () => {
+  afterEach(() => vi.useRealTimers())
+
+  it("returns the local calendar day as YYYY-MM-DD", () => {
+    vi.useFakeTimers()
+    // Midday local time, well away from any UTC day boundary.
+    vi.setSystemTime(new Date(2026, 2, 10, 12, 0, 0))
+    expect(todayIso()).toBe('2026-03-10')
+  })
+
+  it('reflects the clock when it advances past midnight', () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2026, 11, 31, 23, 59, 59))
+    expect(todayIso()).toBe('2026-12-31')
+    vi.setSystemTime(new Date(2027, 0, 1, 0, 0, 1))
+    expect(todayIso()).toBe('2027-01-01')
+  })
+})
+
+describe('isoToDate / dateToIso', () => {
+  it('isoToDate builds a local-midnight Date for the given day', () => {
+    const d = isoToDate('2026-05-01')
+    expect(d.getFullYear()).toBe(2026)
+    expect(d.getMonth()).toBe(4) // May (0-indexed)
+    expect(d.getDate()).toBe(1)
+    expect(d.getHours()).toBe(0)
+  })
+
+  it('dateToIso formats local date parts, zero-padded', () => {
+    expect(dateToIso(new Date(2026, 0, 5))).toBe('2026-01-05')
+    expect(dateToIso(new Date(2026, 11, 31))).toBe('2026-12-31')
+  })
+
+  it('round-trips ISO → Date → ISO without timezone drift', () => {
+    for (const iso of ['2026-01-01', '2026-05-01', '2026-06-17', '2026-12-31']) {
+      expect(dateToIso(isoToDate(iso))).toBe(iso)
+    }
   })
 })
