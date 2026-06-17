@@ -35,6 +35,22 @@ describe('Dashboard', () => {
     expect(proteinValue).toHaveTextContent('/ 100')
   })
 
+  it('lets a goal field be cleared without snapping to 0, reverting on blur', () => {
+    renderSeeded()
+    const proteinGoal = screen.getByLabelText('Protein goal') as HTMLInputElement
+
+    // Clearing keeps the field blank for free retyping rather than forcing 0.
+    fireEvent.change(proteinGoal, { target: { value: '' } })
+    expect(proteinGoal.value).toBe('')
+    // The summary still reflects the previous committed goal (120), not 0.
+    const proteinValue = screen.getByLabelText('Protein consumed').closest('dd')!
+    expect(proteinValue).toHaveTextContent('/ 120')
+
+    // Blurring while blank discards the in-progress edit and re-syncs to 120.
+    fireEvent.blur(proteinGoal)
+    expect(proteinGoal.value).toBe('120')
+  })
+
   it('groups food entries under the correct meal headings', () => {
     renderSeeded()
     const log = screen.getByRole('region', { name: 'Food log' })

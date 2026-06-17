@@ -95,9 +95,26 @@ function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: Dashboard
     [loggedFoods, selectedDate],
   )
 
+  // While a goal field is being edited it tracks its raw string here so the user
+  // can clear it and retype freely; a blank or unparseable value leaves the
+  // committed goal untouched rather than silently snapping it to 0.
+  const [goalDrafts, setGoalDrafts] = useState<Partial<Record<MacroKey, string>>>({})
+
   const updateGoal = (macro: MacroKey, raw: string) => {
+    setGoalDrafts((drafts) => ({ ...drafts, [macro]: raw }))
+    if (raw.trim() === '') return
     const value = Number(raw)
-    setGoals({ ...goals, [macro]: Number.isFinite(value) ? value : 0 })
+    if (Number.isFinite(value)) setGoals({ ...goals, [macro]: value })
+  }
+
+  // On blur, drop the draft so the field re-syncs to the committed number —
+  // discarding any blank/invalid in-progress edit.
+  const commitGoal = (macro: MacroKey) => {
+    setGoalDrafts((drafts) => {
+      const rest = { ...drafts }
+      delete rest[macro]
+      return rest
+    })
   }
 
   // Stamp new entries with the selected day so they show up in the day on screen.
@@ -253,8 +270,9 @@ function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: Dashboard
                     <input
                       type="number"
                       aria-label={`${meta.label} goal`}
-                      value={goals[macro]}
+                      value={goalDrafts[macro] ?? goals[macro]}
                       onChange={(e) => updateGoal(macro, e.target.value)}
+                      onBlur={() => commitGoal(macro)}
                       className="w-20 rounded-md border border-slate-300 px-2 py-1 text-right text-slate-800 focus:border-slate-500 focus:outline-none"
                     />
                   </label>
