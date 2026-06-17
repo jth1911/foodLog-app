@@ -99,6 +99,10 @@ export function firestoreRepo(db: Firestore, uid: string): FoodLogRepository {
   const goalsDoc = doc(db, 'users', uid, 'goals', 'macros')
 
   return {
+    // Subscribes to the user's whole entries collection; the Dashboard filters
+    // by date client-side, which keeps day-to-day navigation instant and works
+    // offline. Fine at a personal log's scale; if histories grow large this is
+    // the place to switch to a date-range query (e.g. by week) instead.
     subscribeEntries(onChange) {
       return onSnapshot(entriesCol, (snap) => {
         onChange(snap.docs.map((d) => docToEntry(d.id, d.data())))

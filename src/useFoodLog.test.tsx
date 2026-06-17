@@ -132,4 +132,39 @@ describe('useFoodLog — signed in', () => {
     rerender({ uid: null })
     expect(result.current.entries).toEqual(SEED_FOODS)
   })
+
+  it('never surfaces a previous user’s data after an account switch', () => {
+    // Per-uid repos with distinct data; user B's repo is "slow" — it doesn't
+    // emit a snapshot until released, modelling the window before Firestore's
+    // first callback arrives.
+    const repoA = makeFakeRepo([makeEntry('a-1')])
+    let releaseB: ((e: FoodEntry[]) => void) | null = null
+    const repoB: FoodLogRepository = {
+      subscribeEntries(cb) {
+        releaseB = cb
+        return () => {}
+      },
+      async addEntry() {},
+      async deleteEntry() {},
+      subscribeGoals() {
+        return () => {}
+      },
+      async setGoals() {},
+    }
+    const repos: Record<string, FoodLogRepository> = { a: repoA, b: repoB }
+
+    const { result, rerender } = renderHook(
+      ({ uid }: { uid: string }) => useFoodLog({ uid, makeRepo: (u) => repos[u] }),
+      { initialProps: { uid: 'a' } },
+    )
+    expect(result.current.entries).toEqual([makeEntry('a-1')])
+
+    // Switch to B. Until B emits, we must show empty — NOT A's data.
+    rerender({ uid: 'b' })
+    expect(result.current.entries).toEqual([])
+
+    // B's first snapshot arrives.
+    act(() => releaseB?.([makeEntry('b-1')]))
+    expect(result.current.entries).toEqual([makeEntry('b-1')])
+  })
 })

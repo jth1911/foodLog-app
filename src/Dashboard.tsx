@@ -54,7 +54,7 @@ type DashboardProps = {
 }
 
 function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: DashboardProps = {}) {
-  const { user, signIn, signOut } = useAuth()
+  const { user, signIn, signOut, ready } = useAuth()
   // Signed out → local seed/demo state; signed in → the user's synced cloud data.
   const { entries: loggedFoods, goals, addEntry, deleteEntry, setGoals } = useFoodLog({
     uid: user?.uid ?? null,
@@ -114,6 +114,18 @@ function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: Dashboard
 
   const deleteFood = (id: string) => {
     deleteEntry(id)
+  }
+
+  // While Firebase is still resolving the initial auth state, hold off rendering
+  // so a returning signed-in user doesn't flash the signed-out demo before their
+  // cloud data loads. (When Firebase isn't configured, `ready` is true from the
+  // start, so this never blocks the local demo.)
+  if (!ready) {
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-500">
+        Loading…
+      </div>
+    )
   }
 
   return (
