@@ -9,7 +9,8 @@ import {
   type MacroKey,
 } from './lib/nutrition'
 import MealFeed from './MealFeed'
-import { addDays } from './lib/dates'
+import AddFoodModal, { type NewFoodInput } from './AddFoodModal'
+import { addDays, isoWeekOf, weekdayOf } from './lib/dates'
 
 // Fixed seed date so seeded data always shows and the UI is deterministic for a mock.
 // Also the date the selector starts on and the "Today" button returns to.
@@ -112,9 +113,10 @@ function formatDateLabel(iso: string): string {
 }
 
 function Dashboard() {
-  const [loggedFoods] = useState<FoodEntry[]>(SEED_FOODS)
+  const [loggedFoods, setLoggedFoods] = useState<FoodEntry[]>(SEED_FOODS)
   const [goals, setGoals] = useState<Goals>(DEFAULT_GOALS)
   const [selectedDate, setSelectedDate] = useState(SEED_DATE)
+  const [isModalOpen, setIsModalOpen] = useState(false)
 
   const totals = useMemo(
     () => totalsForDate(loggedFoods, selectedDate),
@@ -129,6 +131,22 @@ function Dashboard() {
   const updateGoal = (macro: MacroKey, raw: string) => {
     const value = Number(raw)
     setGoals((prev) => ({ ...prev, [macro]: Number.isFinite(value) ? value : 0 }))
+  }
+
+  // Stamp new entries with the selected day so they show up in the day on screen.
+  const addFood = (input: NewFoodInput) => {
+    const entry: FoodEntry = {
+      id: crypto.randomUUID(),
+      date: selectedDate,
+      week: isoWeekOf(selectedDate),
+      weekday: weekdayOf(selectedDate),
+      ...input,
+    }
+    setLoggedFoods((prev) => [...prev, entry])
+  }
+
+  const deleteFood = (id: string) => {
+    setLoggedFoods((prev) => prev.filter((f) => f.id !== id))
   }
 
   return (
@@ -209,7 +227,7 @@ function Dashboard() {
             </section>
 
             {/* Food log grouped by meal, filtered to the selected date */}
-            <MealFeed loggedFoods={foodsForDate} />
+            <MealFeed loggedFoods={foodsForDate} onDelete={deleteFood} />
           </main>
 
           {/* Goals side panel */}
@@ -241,6 +259,20 @@ function Dashboard() {
           </aside>
         </div>
       </div>
+
+      {/* Always-reachable trigger to log a new food on the selected day. */}
+      <button
+        type="button"
+        aria-label="Add food"
+        onClick={() => setIsModalOpen(true)}
+        className="fixed bottom-6 right-6 flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-3xl leading-none text-white shadow-lg hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
+      >
+        +
+      </button>
+
+      {isModalOpen && (
+        <AddFoodModal onAdd={addFood} onClose={() => setIsModalOpen(false)} />
+      )}
     </div>
   )
 }
