@@ -2,14 +2,13 @@ import { useMemo, useState } from 'react'
 import {
   MACRO_KEYS,
   MACRO_META,
-  MEAL_TYPES,
   goalStatus,
-  groupByMeal,
   totalsForDate,
   type FoodEntry,
   type Goals,
   type MacroKey,
 } from './lib/nutrition'
+import MealFeed from './MealFeed'
 
 // Fixed "today" so seeded data always shows and the UI is deterministic for a mock.
 const TODAY = '2026-06-17'
@@ -101,7 +100,6 @@ function Dashboard() {
   const [goals, setGoals] = useState<Goals>(DEFAULT_GOALS)
 
   const totals = useMemo(() => totalsForDate(loggedFoods, TODAY), [loggedFoods])
-  const grouped = useMemo(() => groupByMeal(loggedFoods.filter((f) => f.date === TODAY)), [loggedFoods])
 
   const updateGoal = (macro: MacroKey, raw: string) => {
     const value = Number(raw)
@@ -150,45 +148,7 @@ function Dashboard() {
             </section>
 
             {/* Food log grouped by meal */}
-            <section
-              aria-label="Food log"
-              className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
-            >
-              <h2 className="mb-4 text-lg font-semibold text-slate-900">Food log</h2>
-              <div className="space-y-5">
-                {MEAL_TYPES.map((meal) => {
-                  const items = grouped[meal]
-                  return (
-                    <div key={meal}>
-                      <h3 className="mb-2 text-sm font-semibold uppercase tracking-wide text-slate-500">
-                        {meal}
-                      </h3>
-                      {items.length === 0 ? (
-                        <p className="text-sm italic text-slate-400">Nothing logged yet.</p>
-                      ) : (
-                        <ul className="divide-y divide-slate-100">
-                          {items.map((item) => (
-                            <li
-                              key={item.id}
-                              className="flex items-center justify-between py-2 text-sm"
-                            >
-                              <span className="text-slate-700">{item.description}</span>
-                              <span className="flex gap-3 text-xs text-slate-500">
-                                <span>{item.calories} kcal</span>
-                                <span>P {item.protein}</span>
-                                <span>F {item.fat}</span>
-                                <span>C {item.carbs}</span>
-                                <span>Fb {item.fiber}</span>
-                              </span>
-                            </li>
-                          ))}
-                        </ul>
-                      )}
-                    </div>
-                  )
-                })}
-              </div>
-            </section>
+            <MealFeed loggedFoods={loggedFoods} />
           </main>
 
           {/* Goals side panel */}
