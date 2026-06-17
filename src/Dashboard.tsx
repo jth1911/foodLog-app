@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { DayPicker } from '@daypicker/react'
+import { enGB } from 'date-fns/locale'
 import '@daypicker/react/style.css'
 import {
   MACRO_KEYS,
@@ -238,6 +239,9 @@ function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: Dashboard
                 <DayPicker
                   mode="single"
                   required
+                  // Match the app's en-GB date formatting: Monday-first weeks
+                  // and UK day labels, instead of DayPicker's en-US default.
+                  locale={enGB}
                   defaultMonth={isoToDate(selectedDate)}
                   selected={isoToDate(selectedDate)}
                   onSelect={(date) => {

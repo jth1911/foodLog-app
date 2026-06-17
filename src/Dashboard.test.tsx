@@ -110,7 +110,7 @@ describe('Dashboard', () => {
       // Open the popover and pick a "fuzzy" mid-month day by glancing at the grid.
       await user.click(screen.getByRole('button', { name: 'Choose date' }))
       const calendar = screen.getByRole('dialog', { name: 'Calendar' })
-      await user.click(within(calendar).getByRole('button', { name: /May 15th, 2026/ }))
+      await user.click(within(calendar).getByRole('button', { name: /, 15 May 2026/ }))
 
       // Popover closes; the empty day is now selected.
       expect(screen.queryByRole('dialog', { name: 'Calendar' })).not.toBeInTheDocument()
@@ -122,7 +122,7 @@ describe('Dashboard', () => {
       // Picking the seeded day again brings its content back (ISO↔Date round-trip).
       await user.click(screen.getByRole('button', { name: 'Choose date' }))
       const reopened = screen.getByRole('dialog', { name: 'Calendar' })
-      await user.click(within(reopened).getByRole('button', { name: /May 1st, 2026/ }))
+      await user.click(within(reopened).getByRole('button', { name: /, 1 May 2026/ }))
       expect(screen.getByRole('button', { name: 'Choose date' })).toHaveTextContent(
         'Friday, 1 May 2026',
       )
