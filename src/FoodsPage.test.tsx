@@ -31,6 +31,7 @@ describe('FoodsPage', () => {
     expect(onSelectFood).toHaveBeenCalledTimes(1)
     expect(onSelectFood).toHaveBeenCalledWith({
       description: 'Egg',
+      servingSize: '1 large',
       protein: 6,
       carbs: 1,
       calories: 70,

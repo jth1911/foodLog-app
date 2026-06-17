@@ -22,7 +22,15 @@ function MealSection({ meal, entries, onDelete }: MealSectionProps) {
         <ul className="divide-y divide-slate-100">
           {entries.map((item) => (
             <li key={item.id} className="flex items-center justify-between gap-3 py-2 text-sm">
-              <span className="text-slate-700">{item.description}</span>
+              <span className="min-w-0 text-slate-700">
+                {item.description}
+                {/* Reference foods logged with a quantity show "2 × 1 large". */}
+                {item.quantity != null && item.servingSize != null && (
+                  <span className="ml-2 text-xs text-slate-400">
+                    {item.quantity} × {item.servingSize}
+                  </span>
+                )}
+              </span>
               <span className="flex items-center gap-3 text-xs text-slate-500">
                 <span>{item.calories} kcal</span>
                 <span>P {item.protein}</span>

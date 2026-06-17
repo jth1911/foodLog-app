@@ -8,10 +8,12 @@ type FoodsPageProps = {
 }
 
 // Map a reference food onto the modal's input shape. Only the fields the JSON
-// carries are set; fat and fiber are intentionally left for the user.
+// carries are set; fat and fiber are intentionally left for the user. The
+// serving size is passed so the modal opens in quantity-scaling mode.
 function toFoodInput(food: FoodReference): Partial<NewFoodInput> {
   return {
     description: food.food,
+    servingSize: food.serving_size,
     protein: normaliseMacro(food.protein_g),
     carbs: normaliseMacro(food.carbs_g),
     calories: normaliseMacro(food.calories_kcal),

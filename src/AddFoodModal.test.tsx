@@ -107,6 +107,100 @@ describe('AddFoodModal', () => {
     })
   })
 
+  describe('quantity scaling (pre-filled foods)', () => {
+    const eggValues = {
+      description: 'Egg',
+      mealType: 'Breakfast' as const,
+      servingSize: '1 large',
+      protein: 6,
+      carbs: 1,
+      calories: 70,
+    }
+
+    it('shows no quantity field on a blank FAB open', () => {
+      render(<AddFoodModal onAdd={() => {}} onClose={() => {}} />)
+      expect(screen.queryByLabelText('Quantity')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Serving size')).not.toBeInTheDocument()
+    })
+
+    it('shows the read-only serving and a quantity field when pre-filled with a serving', () => {
+      render(<AddFoodModal onAdd={() => {}} onClose={() => {}} initialValues={eggValues} />)
+      expect(screen.getByLabelText('Serving size')).toHaveTextContent('1 large')
+      expect(screen.getByLabelText('Quantity')).toHaveValue(1)
+    })
+
+    it('submits per-serving macros unchanged at the default quantity of 1', async () => {
+      const onAdd = vi.fn()
+      const user = userEvent.setup()
+      render(<AddFoodModal onAdd={onAdd} onClose={() => {}} initialValues={eggValues} />)
+
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+
+      expect(onAdd).toHaveBeenCalledWith({
+        description: 'Egg',
+        mealType: 'Breakfast',
+        calories: 70,
+        protein: 6,
+        fat: 0,
+        carbs: 1,
+        fiber: 0,
+        servingSize: '1 large',
+        quantity: 1,
+      })
+    })
+
+    it('doubles the macros and records quantity 2', async () => {
+      const onAdd = vi.fn()
+      const user = userEvent.setup()
+      render(<AddFoodModal onAdd={onAdd} onClose={() => {}} initialValues={eggValues} />)
+
+      fireEvent.change(screen.getByLabelText('Quantity'), { target: { value: '2' } })
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+
+      expect(onAdd).toHaveBeenCalledWith(
+        expect.objectContaining({ calories: 140, protein: 12, carbs: 2, quantity: 2 }),
+      )
+    })
+
+    it('halves the macros for a partial serving, keeping non-integers', async () => {
+      const onAdd = vi.fn()
+      const user = userEvent.setup()
+      render(<AddFoodModal onAdd={onAdd} onClose={() => {}} initialValues={eggValues} />)
+
+      // Add per-serving fat so the 0.5 × 5 = 2.5 non-integer case is exercised.
+      await user.type(screen.getByLabelText('Fat'), '5')
+      fireEvent.change(screen.getByLabelText('Quantity'), { target: { value: '0.5' } })
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+
+      expect(onAdd).toHaveBeenCalledWith(
+        expect.objectContaining({ calories: 35, protein: 3, fat: 2.5, carbs: 0.5, quantity: 0.5 }),
+      )
+    })
+
+    it('shows a live preview of the scaled totals', async () => {
+      render(<AddFoodModal onAdd={() => {}} onClose={() => {}} initialValues={eggValues} />)
+
+      const preview = screen.getByLabelText('Scaled totals')
+      expect(preview).toHaveTextContent('70 kcal')
+
+      fireEvent.change(screen.getByLabelText('Quantity'), { target: { value: '3' } })
+      expect(preview).toHaveTextContent('210 kcal')
+      expect(preview).toHaveTextContent('18 g')
+    })
+
+    it('rejects a zero or negative quantity', async () => {
+      const onAdd = vi.fn()
+      const user = userEvent.setup()
+      render(<AddFoodModal onAdd={onAdd} onClose={() => {}} initialValues={eggValues} />)
+
+      fireEvent.change(screen.getByLabelText('Quantity'), { target: { value: '0' } })
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+
+      expect(onAdd).not.toHaveBeenCalled()
+      expect(screen.getByRole('alert')).toHaveTextContent(/quantity/i)
+    })
+  })
+
   it('cancels without adding', async () => {
     const onAdd = vi.fn()
     const onClose = vi.fn()

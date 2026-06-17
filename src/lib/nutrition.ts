@@ -15,6 +15,11 @@ export type FoodEntry = {
   protein: number // grams
   fiber: number // grams
   calories: number
+  // Present only for entries logged from the Foods page with a scaled quantity.
+  // The macros above are the scaled totals; these record what they were scaled
+  // from so the row can show e.g. "2 × 1 large". Optional for backwards-compat.
+  servingSize?: string // the reference serving, read-only (e.g. "1 large")
+  quantity?: number // how many of that serving were logged
 }
 
 // The numeric fields we total and compare against goals.
