@@ -38,4 +38,41 @@ describe('Dashboard', () => {
     expect(within(log).getByText('Grilled chicken salad')).toBeInTheDocument()
     expect(within(log).getByText('Salmon, quinoa & broccoli')).toBeInTheDocument()
   })
+
+  it('renders a date control initialised to the seed date', () => {
+    render(<Dashboard />)
+    const dateInput = screen.getByLabelText('Selected date') as HTMLInputElement
+    expect(dateInput.value).toBe('2026-06-17')
+    expect(screen.getByRole('button', { name: 'Previous day' })).toBeInTheDocument()
+    expect(screen.getByRole('button', { name: 'Next day' })).toBeInTheDocument()
+  })
+
+  it('shows zero totals and empty meal states for a day with no entries', () => {
+    render(<Dashboard />)
+    fireEvent.change(screen.getByLabelText('Selected date'), {
+      target: { value: '2026-06-18' },
+    })
+    expect(screen.getByLabelText('Calories consumed')).toHaveTextContent('0')
+    expect(screen.getByLabelText('Protein consumed')).toHaveTextContent('0')
+
+    const log = screen.getByRole('region', { name: 'Food log' })
+    expect(within(log).queryByText('Grilled chicken salad')).not.toBeInTheDocument()
+    expect(within(log).getByText(/no food logged for breakfast yet/i)).toBeInTheDocument()
+  })
+
+  it('steps the date forward and back one day, keeping summary and feed in sync', () => {
+    render(<Dashboard />)
+    const dateInput = screen.getByLabelText('Selected date') as HTMLInputElement
+    const log = screen.getByRole('region', { name: 'Food log' })
+
+    fireEvent.click(screen.getByRole('button', { name: 'Next day' }))
+    expect(dateInput.value).toBe('2026-06-18')
+    expect(screen.getByLabelText('Calories consumed')).toHaveTextContent('0')
+    expect(within(log).queryByText('Grilled chicken salad')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Previous day' }))
+    expect(dateInput.value).toBe('2026-06-17')
+    expect(screen.getByLabelText('Calories consumed')).toHaveTextContent('1435')
+    expect(within(log).getByText('Grilled chicken salad')).toBeInTheDocument()
+  })
 })
