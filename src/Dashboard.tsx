@@ -14,15 +14,6 @@ import MealFeed from './MealFeed'
 import AddFoodModal, { type NewFoodInput } from './AddFoodModal'
 import { addDays, dateToIso, isoToDate, isoWeekOf, todayIso, weekdayOf } from './lib/dates'
 import { useFoodLog } from './useFoodLog'
-import { useAuth } from './lib/useAuth'
-import { firestoreRepo, type FoodLogRepository } from './lib/foodLogRepo'
-import { db } from './lib/firebase'
-import SignInControl from './SignInControl'
-
-// Builds the live Firestore-backed store for a signed-in user. Module-scoped so
-// its identity is stable across renders. `db` is non-null whenever a user is
-// signed in (sign-in requires a configured Firebase app).
-const defaultMakeRepo = (uid: string): FoodLogRepository => firestoreRepo(db!, uid)
 
 const statusClasses: Record<'met' | 'unmet', string> = {
   met: 'text-emerald-600',
@@ -54,12 +45,8 @@ type DashboardProps = {
 }
 
 function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: DashboardProps = {}) {
-  const { user, signIn, signOut, ready } = useAuth()
-  // Signed out → local seed/demo state; signed in → the user's synced cloud data.
-  const { entries: loggedFoods, goals, addEntry, deleteEntry, setGoals } = useFoodLog({
-    uid: user?.uid ?? null,
-    makeRepo: defaultMakeRepo,
-  })
+  // The log, persisted to localStorage and seeded with the demo on first run.
+  const { entries: loggedFoods, goals, addEntry, deleteEntry, setGoals } = useFoodLog()
   const [selectedDate, setSelectedDate] = useState(today)
   const [isFabOpen, setIsFabOpen] = useState(false)
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
@@ -133,18 +120,6 @@ function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: Dashboard
     deleteEntry(id)
   }
 
-  // While Firebase is still resolving the initial auth state, hold off rendering
-  // so a returning signed-in user doesn't flash the signed-out demo before their
-  // cloud data loads. (When Firebase isn't configured, `ready` is true from the
-  // start, so this never blocks the local demo.)
-  if (!ready) {
-    return (
-      <div className="flex min-h-screen items-center justify-center bg-slate-50 text-slate-500">
-        Loading…
-      </div>
-    )
-  }
-
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
       <div className="mx-auto max-w-5xl px-4 py-8">
@@ -154,7 +129,6 @@ function Dashboard({ prefill, onPrefillConsumed, today = todayIso() }: Dashboard
             <p className="text-sm text-slate-500">{formatDateLabel(selectedDate)}</p>
           </div>
           <div className="flex flex-col items-start gap-3 sm:items-end">
-            <SignInControl user={user} onSignIn={signIn} onSignOut={signOut} />
             <div className="relative flex items-center gap-1" ref={calendarRef}>
             <button
               type="button"

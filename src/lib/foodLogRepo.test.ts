@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest'
-import { docToEntry, docToGoals, entryToDoc, goalsToDoc } from './foodLogRepo'
+import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { ENTRIES_KEY, GOALS_KEY, localStorageStore } from './foodLogRepo'
 import { DEFAULT_GOALS, type FoodEntry, type Goals } from './nutrition'
 
 const baseEntry: FoodEntry = {
@@ -16,60 +16,66 @@ const baseEntry: FoodEntry = {
   calories: 430,
 }
 
-describe('entryToDoc', () => {
-  it('drops the id (the doc id holds it) and keeps every macro field', () => {
-    const doc = entryToDoc(baseEntry)
-    expect(doc).not.toHaveProperty('id')
-    expect(doc).toMatchObject({
-      date: '2026-05-01',
-      week: 18,
-      weekday: 'Friday',
-      mealType: 'Lunch',
-      description: 'Grilled chicken salad',
-      fat: 18,
-      carbs: 20,
-      protein: 43,
-      fiber: 7,
-      calories: 430,
-    })
+describe('localStorageStore', () => {
+  beforeEach(() => localStorage.clear())
+  afterEach(() => localStorage.clear())
+
+  it('returns null when nothing has been stored yet', () => {
+    expect(localStorageStore.loadEntries()).toBeNull()
+    expect(localStorageStore.loadGoals()).toBeNull()
   })
 
-  it('omits absent optional fields rather than writing undefined (Firestore rejects undefined)', () => {
-    const doc = entryToDoc(baseEntry)
-    expect('servingSize' in doc).toBe(false)
-    expect('quantity' in doc).toBe(false)
+  it('round-trips entries through localStorage', () => {
+    const entries = [baseEntry, { ...baseEntry, id: 'def', servingSize: '1 large', quantity: 2 }]
+    localStorageStore.saveEntries(entries)
+    expect(localStorageStore.loadEntries()).toEqual(entries)
   })
 
-  it('includes servingSize/quantity when present', () => {
-    const doc = entryToDoc({ ...baseEntry, servingSize: '1 large', quantity: 2 })
-    expect(doc).toMatchObject({ servingSize: '1 large', quantity: 2 })
-  })
-})
-
-describe('docToEntry', () => {
-  it('round-trips an entry through the doc form', () => {
-    const back = docToEntry(baseEntry.id, entryToDoc(baseEntry))
-    expect(back).toEqual(baseEntry)
+  it('round-trips goals through localStorage', () => {
+    const goals: Goals = { ...DEFAULT_GOALS, protein: 200 }
+    localStorageStore.saveGoals(goals)
+    expect(localStorageStore.loadGoals()).toEqual(goals)
   })
 
-  it('round-trips a quantity-scaled entry', () => {
-    const scaled: FoodEntry = { ...baseEntry, servingSize: '1 large', quantity: 2 }
-    expect(docToEntry(scaled.id, entryToDoc(scaled))).toEqual(scaled)
+  it('persists an empty list distinctly from "nothing stored"', () => {
+    localStorageStore.saveEntries([])
+    expect(localStorageStore.loadEntries()).toEqual([])
   })
 
-  it('uses the passed id, not anything in the doc', () => {
-    expect(docToEntry('xyz', entryToDoc(baseEntry)).id).toBe('xyz')
-  })
-})
-
-describe('goals mappers', () => {
-  it('round-trips goals', () => {
-    const goals: Goals = { calories: 2100, protein: 130, fat: 70, carbs: 140, fiber: 35 }
-    expect(docToGoals(goalsToDoc(goals))).toEqual(goals)
+  it('writes under stable, versioned keys', () => {
+    localStorageStore.saveEntries([baseEntry])
+    localStorageStore.saveGoals(DEFAULT_GOALS)
+    expect(localStorage.getItem(ENTRIES_KEY)).toContain('Grilled chicken salad')
+    expect(localStorage.getItem(GOALS_KEY)).not.toBeNull()
   })
 
-  it('falls back to defaults for a missing/partial doc', () => {
-    expect(docToGoals(undefined)).toEqual(DEFAULT_GOALS)
-    expect(docToGoals({ protein: 200 })).toEqual({ ...DEFAULT_GOALS, protein: 200 })
+  it('returns null (rather than throwing) on corrupt JSON', () => {
+    localStorage.setItem(ENTRIES_KEY, '{not valid json')
+    localStorage.setItem(GOALS_KEY, 'also broken')
+    expect(localStorageStore.loadEntries()).toBeNull()
+    expect(localStorageStore.loadGoals()).toBeNull()
+  })
+
+  it('rejects valid JSON of the wrong shape for entries (non-array → null)', () => {
+    // Tampered/legacy values that parse fine but would crash entries.filter(...).
+    for (const bad of ['{}', '42', '"a string"', 'null', 'true']) {
+      localStorage.setItem(ENTRIES_KEY, bad)
+      expect(localStorageStore.loadEntries()).toBeNull()
+    }
+  })
+
+  it('rejects valid JSON of the wrong shape for goals', () => {
+    // Non-object, array, and objects missing/with non-numeric macros all fail.
+    localStorage.setItem(GOALS_KEY, '[]')
+    expect(localStorageStore.loadGoals()).toBeNull()
+    localStorage.setItem(GOALS_KEY, JSON.stringify({ calories: 2000 }))
+    expect(localStorageStore.loadGoals()).toBeNull()
+    localStorage.setItem(GOALS_KEY, JSON.stringify({ ...DEFAULT_GOALS, protein: 'lots' }))
+    expect(localStorageStore.loadGoals()).toBeNull()
+  })
+
+  it('accepts a well-formed goals object', () => {
+    localStorage.setItem(GOALS_KEY, JSON.stringify(DEFAULT_GOALS))
+    expect(localStorageStore.loadGoals()).toEqual(DEFAULT_GOALS)
   })
 })

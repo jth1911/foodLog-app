@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, afterEach } from 'vitest'
+import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Dashboard from './Dashboard'
@@ -9,6 +9,9 @@ const SEED_DATE = '2026-05-01' // a Friday → "Friday, 1 May 2026"
 const renderSeeded = () => render(<Dashboard today={SEED_DATE} />)
 
 describe('Dashboard', () => {
+  // Start every test from an empty store so the demo seed loads fresh and one
+  // test's persisted entries never leak into the next.
+  beforeEach(() => localStorage.clear())
   it('renders the heading and summary card', () => {
     renderSeeded()
     expect(screen.getByRole('heading', { name: 'Food Log' })).toBeInTheDocument()

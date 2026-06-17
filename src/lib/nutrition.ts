@@ -51,7 +51,7 @@ export const MACRO_META: Record<MacroKey, MacroMeta> = {
 export type Totals = Record<MacroKey, number>
 export type Goals = Record<MacroKey, number>
 
-/** Starting macro goals, used signed-out and as the seed for a new user's cloud goals. */
+/** Starting macro goals, used to seed the log on a first-ever (empty-storage) load. */
 export const DEFAULT_GOALS: Goals = {
   calories: 2000,
   protein: 120,

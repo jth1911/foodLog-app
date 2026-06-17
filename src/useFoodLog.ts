@@ -1,6 +1,6 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useState } from 'react'
 import { DEFAULT_GOALS, type FoodEntry, type Goals } from './lib/nutrition'
-import type { FoodLogRepository } from './lib/foodLogRepo'
+import { localStorageStore, type FoodLogStore } from './lib/foodLogRepo'
 import { isoWeekOf, weekdayOf } from './lib/dates'
 
 // Fixed date the demo entries live on, decoupled from the real "today" the app
@@ -10,7 +10,9 @@ const SEED_DATE = '2026-05-01'
 const SEED_WEEK = isoWeekOf(SEED_DATE)
 const SEED_WEEKDAY = weekdayOf(SEED_DATE)
 
-// The signed-out demo experience: a populated day across all three meals.
+// The first-run demo experience: a populated day across all three meals. Seeded
+// only when storage is empty (see useFoodLog); once real data exists it never
+// re-seeds.
 export const SEED_FOODS: FoodEntry[] = [
   {
     id: '1',
@@ -79,14 +81,6 @@ export const SEED_FOODS: FoodEntry[] = [
   },
 ]
 
-// Cloud writes are otherwise fire-and-forget: with offline persistence they're
-// queued locally and resolve on reconnect, so a rejection means a real failure
-// (e.g. permission denied). Log it rather than letting it surface as an
-// unhandled rejection. (Surfacing it in the UI is a reasonable future step.)
-function reportWriteError(error: unknown): void {
-  console.error('Food log cloud write failed:', error)
-}
-
 export type FoodLog = {
   entries: FoodEntry[]
   goals: Goals
@@ -95,119 +89,40 @@ export type FoodLog = {
   setGoals: (goals: Goals) => void
 }
 
-type UseFoodLogArgs = {
-  // The signed-in user's uid, or null when signed out.
-  uid: string | null
-  // Builds a repository for a uid. Read from a ref so an inline function doesn't
-  // tear down and re-establish the subscription on every render — only a change
-  // of `uid` does.
-  makeRepo: (uid: string) => FoodLogRepository
-}
-
 /**
- * The food-log data source the Dashboard consumes.
+ * The food-log data source the Dashboard consumes, persisted to localStorage.
  *
- * Signed out (`uid == null`): falls back to local, in-memory state seeded with
- * the demo entries — exactly the app's original behaviour, working offline.
+ * On first-ever load (nothing stored) it seeds the demo entries and default
+ * goals; once anything has been written the stored copy wins and the demo never
+ * re-seeds. Every change — and the initial seed itself — is written straight
+ * back to the store, so clearing every entry later can't be mistaken for a fresh
+ * install that would re-seed.
  *
- * Signed in: subscribes to the user's Firestore documents via `makeRepo(uid)`,
- * so entries and goals sync across every device. On sign-in the local seed is
- * dropped in favour of the cloud copy (merging local→cloud is out of scope).
+ * `store` is injectable so tests can pass an in-memory fake.
  */
-export function useFoodLog({ uid, makeRepo }: UseFoodLogArgs): FoodLog {
-  const signedIn = uid != null
+export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
+  const [entries, setEntries] = useState<FoodEntry[]>(() => store.loadEntries() ?? SEED_FOODS)
+  const [goals, setGoalsState] = useState<Goals>(() => store.loadGoals() ?? DEFAULT_GOALS)
 
-  // Signed-out state: the local demo, mutated in place. Kept separate from the
-  // cloud state (rather than reset on sign-in/out) so the effect never has to
-  // call setState synchronously — it only does so from subscription callbacks.
-  const [localEntries, setLocalEntries] = useState<FoodEntry[]>(SEED_FOODS)
-  const [localGoals, setLocalGoals] = useState<Goals>(DEFAULT_GOALS)
-
-  // Signed-in state: populated only by the Firestore subscription, and tagged
-  // with the uid it belongs to. The tag means that after an account switch we
-  // never surface the previous user's data: until the new user's first snapshot
-  // arrives the tag won't match `uid`, so we fall back to empty/defaults.
-  const [cloudEntries, setCloudEntries] = useState<{ uid: string; list: FoodEntry[] }>({
-    uid: '',
-    list: [],
-  })
-  const [cloudGoals, setCloudGoals] = useState<{ uid: string; value: Goals }>({
-    uid: '',
-    value: DEFAULT_GOALS,
-  })
-
-  // The repo for the current uid, cached across renders. A ref so the mutators
-  // read the active backend without re-creating it on every render.
-  const repoRef = useRef<{ uid: string; repo: FoodLogRepository } | null>(null)
-  // Latest makeRepo and uid, kept in refs so the subscribe effect can stay keyed
-  // on `uid` alone and the mutators (stable callbacks) can read the current uid.
-  // Updated in an effect (not during render) that runs before the subscribe
-  // effect below, so both always read fresh values when `uid` changes.
-  const makeRepoRef = useRef(makeRepo)
-  const uidRef = useRef(uid)
+  // Persist on every change, and on mount (which writes the initial seed back).
   useEffect(() => {
-    makeRepoRef.current = makeRepo
-    uidRef.current = uid
-  })
-
-  // Get (or lazily build and cache) the repo for the given uid. Building it here
-  // as well as in the subscribe effect means a mutation fired in the same tick
-  // as sign-in — before the effect runs — still routes to the cloud, not local.
-  const repoFor = (forUid: string): FoodLogRepository => {
-    if (repoRef.current?.uid === forUid) return repoRef.current.repo
-    const repo = makeRepoRef.current(forUid)
-    repoRef.current = { uid: forUid, repo }
-    return repo
-  }
-
+    store.saveEntries(entries)
+  }, [store, entries])
   useEffect(() => {
-    if (uid == null) {
-      repoRef.current = null
-      return
-    }
-    const repo = repoFor(uid)
-    const unsubEntries = repo.subscribeEntries((list) => setCloudEntries({ uid, list }))
-    const unsubGoals = repo.subscribeGoals((value) => setCloudGoals({ uid, value }))
-    return () => {
-      unsubEntries()
-      unsubGoals()
-      repoRef.current = null
-    }
-  }, [uid])
+    store.saveGoals(goals)
+  }, [store, goals])
 
   const addEntry = useCallback((entry: FoodEntry) => {
-    const forUid = uidRef.current
-    if (forUid != null) {
-      repoFor(forUid).addEntry(entry).catch(reportWriteError)
-      return
-    }
-    setLocalEntries((prev) => [...prev, entry])
+    setEntries((prev) => [...prev, entry])
   }, [])
 
   const deleteEntry = useCallback((id: string) => {
-    const forUid = uidRef.current
-    if (forUid != null) {
-      repoFor(forUid).deleteEntry(id).catch(reportWriteError)
-      return
-    }
-    setLocalEntries((prev) => prev.filter((f) => f.id !== id))
+    setEntries((prev) => prev.filter((f) => f.id !== id))
   }, [])
 
   const setGoals = useCallback((next: Goals) => {
-    const forUid = uidRef.current
-    if (forUid != null) {
-      repoFor(forUid).setGoals(next).catch(reportWriteError)
-      return
-    }
-    setLocalGoals(next)
+    setGoalsState(next)
   }, [])
 
-  return {
-    // Only surface cloud data once it's confirmed to belong to the current uid.
-    entries: signedIn ? (cloudEntries.uid === uid ? cloudEntries.list : []) : localEntries,
-    goals: signedIn ? (cloudGoals.uid === uid ? cloudGoals.value : DEFAULT_GOALS) : localGoals,
-    addEntry,
-    deleteEntry,
-    setGoals,
-  }
+  return { entries, goals, addEntry, deleteEntry, setGoals }
 }

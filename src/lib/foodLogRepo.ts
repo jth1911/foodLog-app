@@ -1,126 +1,81 @@
-// Data layer for the food log. The Dashboard never talks to Firestore directly —
-// it goes through a FoodLogRepository, so tests can inject an in-memory fake and
-// the Firebase SDK stays isolated in `firestoreRepo` (and `firebase.ts`).
+// Persistence layer for the food log. The hook never touches localStorage
+// directly — it goes through a FoodLogStore, so tests can inject an in-memory
+// fake and the storage details stay isolated here.
 
-import {
-  type DocumentData,
-  type Firestore,
-  collection,
-  deleteDoc,
-  doc,
-  onSnapshot,
-  setDoc,
-} from 'firebase/firestore'
-import {
-  DEFAULT_GOALS,
-  MACRO_KEYS,
-  type FoodEntry,
-  type Goals,
-} from './nutrition'
+import { MACRO_KEYS, type FoodEntry, type Goals } from './nutrition'
 
-/** A live food-log store for a single signed-in user. */
-export type FoodLogRepository = {
-  // Subscribe to the user's entries; calls back with the full list on every
-  // change and returns an unsubscribe function.
-  subscribeEntries(onChange: (entries: FoodEntry[]) => void): () => void
-  addEntry(entry: FoodEntry): Promise<void>
-  deleteEntry(id: string): Promise<void>
-  // Subscribe to the user's goals, falling back to defaults when unset.
-  subscribeGoals(onChange: (goals: Goals) => void): () => void
-  setGoals(goals: Goals): Promise<void>
+// Versioned keys so a future shape change can migrate (or ignore) old data
+// rather than mis-reading it.
+export const ENTRIES_KEY = 'foodlog:entries:v1'
+export const GOALS_KEY = 'foodlog:goals:v1'
+
+/** A durable store for the single local user's food log. */
+export type FoodLogStore = {
+  // Returns the stored value, or null when nothing has been stored yet or the
+  // stored JSON is missing/corrupt — the caller seeds defaults in that case.
+  loadEntries(): FoodEntry[] | null
+  saveEntries(entries: FoodEntry[]): void
+  loadGoals(): Goals | null
+  saveGoals(goals: Goals): void
 }
 
-// --- Pure mappers (FoodEntry/Goals <-> Firestore document shapes) -----------
-// Kept pure and SDK-free so they're unit-testable without Firestore.
-
-/** Strip the id (the doc id carries it) and omit absent optional fields. */
-export function entryToDoc(entry: FoodEntry): DocumentData {
-  const out: DocumentData = {
-    date: entry.date,
-    week: entry.week,
-    weekday: entry.weekday,
-    mealType: entry.mealType,
-    description: entry.description,
-    fat: entry.fat,
-    carbs: entry.carbs,
-    protein: entry.protein,
-    fiber: entry.fiber,
-    calories: entry.calories,
+// Guard against hosts without localStorage. SSR isn't a target (pure client
+// app), but this is cheap insurance and keeps the store usable anywhere.
+function getStorage(): Storage | null {
+  try {
+    return globalThis.localStorage ?? null
+  } catch {
+    return null
   }
-  // Firestore rejects `undefined`, so only write the optionals when set.
-  if (entry.servingSize !== undefined) out.servingSize = entry.servingSize
-  if (entry.quantity !== undefined) out.quantity = entry.quantity
-  return out
 }
 
-/** Reconstruct a FoodEntry from its doc id and stored data. */
-export function docToEntry(id: string, data: DocumentData): FoodEntry {
-  const entry: FoodEntry = {
-    id,
-    date: data.date,
-    week: data.week,
-    weekday: data.weekday,
-    mealType: data.mealType,
-    description: data.description,
-    fat: data.fat,
-    carbs: data.carbs,
-    protein: data.protein,
-    fiber: data.fiber,
-    calories: data.calories,
+// Read and validate a stored value. `isValid` rejects not just unparseable JSON
+// but also valid JSON of the wrong shape (e.g. a tampered key holding a non-array
+// where entries are expected), so a bad value falls back to seed/defaults instead
+// of crashing a consumer like Dashboard's `entries.filter(...)`.
+function loadJson<T>(key: string, isValid: (value: unknown) => value is T): T | null {
+  const storage = getStorage()
+  if (!storage) return null
+  const raw = storage.getItem(key)
+  if (raw == null) return null
+  try {
+    const parsed: unknown = JSON.parse(raw)
+    return isValid(parsed) ? parsed : null
+  } catch {
+    // Corrupt JSON: treat as absent so the caller falls back to seed/defaults.
+    return null
   }
-  if (data.servingSize !== undefined) entry.servingSize = data.servingSize
-  if (data.quantity !== undefined) entry.quantity = data.quantity
-  return entry
 }
 
-export function goalsToDoc(goals: Goals): DocumentData {
-  return { ...goals }
+// Stored entries must be an array to be safe to iterate/filter; we don't deep-
+// validate each element, as malformed individual entries only skew totals rather
+// than crash.
+function isFoodEntryArray(value: unknown): value is FoodEntry[] {
+  return Array.isArray(value)
 }
 
-/** Read goals from a doc, filling any missing macro with its default. */
-export function docToGoals(data: DocumentData | undefined): Goals {
-  const goals = { ...DEFAULT_GOALS }
-  if (!data) return goals
-  for (const key of MACRO_KEYS) {
-    if (typeof data[key] === 'number') goals[key] = data[key]
+// Stored goals must be a plain object carrying every macro as a finite number;
+// anything else (array, null, missing/NaN macro) falls back to the defaults.
+function isGoals(value: unknown): value is Goals {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  return MACRO_KEYS.every((key) => Number.isFinite((value as Record<string, unknown>)[key]))
+}
+
+function saveJson(key: string, value: unknown): void {
+  const storage = getStorage()
+  if (!storage) return
+  try {
+    storage.setItem(key, JSON.stringify(value))
+  } catch (error) {
+    // A personal log won't hit the quota, but don't let a write blow up the UI.
+    console.error('Food log write failed:', error)
   }
-  return goals
 }
 
-// --- Firestore-backed implementation ----------------------------------------
-
-/**
- * A repository backed by Cloud Firestore, scoped to one user's subtree:
- *   users/{uid}/entries/{entryId}   — one doc per food entry
- *   users/{uid}/goals/macros        — a single doc holding the macro goals
- */
-export function firestoreRepo(db: Firestore, uid: string): FoodLogRepository {
-  const entriesCol = collection(db, 'users', uid, 'entries')
-  const goalsDoc = doc(db, 'users', uid, 'goals', 'macros')
-
-  return {
-    // Subscribes to the user's whole entries collection; the Dashboard filters
-    // by date client-side, which keeps day-to-day navigation instant and works
-    // offline. Fine at a personal log's scale; if histories grow large this is
-    // the place to switch to a date-range query (e.g. by week) instead.
-    subscribeEntries(onChange) {
-      return onSnapshot(entriesCol, (snap) => {
-        onChange(snap.docs.map((d) => docToEntry(d.id, d.data())))
-      })
-    },
-    addEntry(entry) {
-      return setDoc(doc(entriesCol, entry.id), entryToDoc(entry))
-    },
-    deleteEntry(id) {
-      return deleteDoc(doc(entriesCol, id))
-    },
-    subscribeGoals(onChange) {
-      return onSnapshot(goalsDoc, (snap) => {
-        onChange(docToGoals(snap.exists() ? snap.data() : undefined))
-      })
-    },
-    setGoals(goals) {
-      return setDoc(goalsDoc, goalsToDoc(goals))
-    },
-  }
+/** The real store, backed by the browser's localStorage. */
+export const localStorageStore: FoodLogStore = {
+  loadEntries: () => loadJson(ENTRIES_KEY, isFoodEntryArray),
+  saveEntries: (entries) => saveJson(ENTRIES_KEY, entries),
+  loadGoals: () => loadJson(GOALS_KEY, isGoals),
+  saveGoals: (goals) => saveJson(GOALS_KEY, goals),
 }
