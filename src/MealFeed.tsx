@@ -4,10 +4,11 @@ import MealSection from './MealSection'
 
 type MealFeedProps = {
   loggedFoods: FoodEntry[]
+  onDelete: (id: string) => void
 }
 
 /** The food log: all logged entries grouped into one section per meal. */
-function MealFeed({ loggedFoods }: MealFeedProps) {
+function MealFeed({ loggedFoods, onDelete }: MealFeedProps) {
   const grouped = useMemo(() => groupByMeal(loggedFoods), [loggedFoods])
 
   return (
@@ -18,7 +19,7 @@ function MealFeed({ loggedFoods }: MealFeedProps) {
       <h2 className="mb-4 text-lg font-semibold text-slate-900">Food log</h2>
       <div className="space-y-5">
         {MEAL_TYPES.map((meal) => (
-          <MealSection key={meal} meal={meal} entries={grouped[meal]} />
+          <MealSection key={meal} meal={meal} entries={grouped[meal]} onDelete={onDelete} />
         ))}
       </div>
     </section>

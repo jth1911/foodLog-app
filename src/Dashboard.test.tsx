@@ -1,5 +1,6 @@
-import { describe, it, expect } from 'vitest'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
+import userEvent from '@testing-library/user-event'
 import Dashboard from './Dashboard'
 
 describe('Dashboard', () => {
@@ -87,5 +88,59 @@ describe('Dashboard', () => {
     // Steppers still work (no crash from an empty ISO string).
     fireEvent.click(screen.getByRole('button', { name: 'Next day' }))
     expect(dateInput.value).toBe('2026-06-18')
+  })
+
+  describe('adding and deleting entries', () => {
+    afterEach(() => vi.restoreAllMocks())
+
+    it('adds an entry via the modal and updates the feed and totals', async () => {
+      const user = userEvent.setup()
+      render(<Dashboard />)
+
+      await user.click(screen.getByRole('button', { name: 'Add food' }))
+      await user.type(screen.getByLabelText('Food name'), 'Protein shake')
+      await user.selectOptions(screen.getByLabelText('Meal type'), 'Snacks')
+      await user.type(screen.getByLabelText('Calories'), '200')
+      await user.type(screen.getByLabelText('Protein'), '30')
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+
+      const log = screen.getByRole('region', { name: 'Food log' })
+      expect(within(log).getByText('Protein shake')).toBeInTheDocument()
+      // calories 1435 + 200 = 1635, protein 107 + 30 = 137
+      expect(screen.getByLabelText('Calories consumed')).toHaveTextContent('1635')
+      expect(screen.getByLabelText('Protein consumed')).toHaveTextContent('137')
+    })
+
+    it('stamps the new entry with the selected date, not today', async () => {
+      const user = userEvent.setup()
+      render(<Dashboard />)
+
+      // Move to an empty day and add there.
+      fireEvent.click(screen.getByRole('button', { name: 'Next day' }))
+      expect(screen.getByLabelText('Selected date')).toHaveValue('2026-06-18')
+
+      await user.click(screen.getByRole('button', { name: 'Add food' }))
+      await user.type(screen.getByLabelText('Food name'), 'Banana')
+      await user.type(screen.getByLabelText('Calories'), '105')
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+
+      expect(screen.getByText('Banana')).toBeInTheDocument()
+      expect(screen.getByLabelText('Calories consumed')).toHaveTextContent('105')
+
+      // Going back to the seed day must not show the new entry.
+      fireEvent.click(screen.getByRole('button', { name: 'Previous day' }))
+      expect(screen.queryByText('Banana')).not.toBeInTheDocument()
+      expect(screen.getByLabelText('Calories consumed')).toHaveTextContent('1435')
+    })
+
+    it('deletes an entry after confirmation and updates totals', () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      render(<Dashboard />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Black coffee' }))
+      expect(screen.queryByText('Black coffee')).not.toBeInTheDocument()
+      // Black coffee was 5 kcal: 1435 - 5 = 1430.
+      expect(screen.getByLabelText('Calories consumed')).toHaveTextContent('1430')
+    })
   })
 })

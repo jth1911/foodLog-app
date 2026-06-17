@@ -1,5 +1,5 @@
-import { describe, it, expect } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
+import { render, screen, fireEvent } from '@testing-library/react'
 import MealSection from './MealSection'
 import type { FoodEntry } from './lib/nutrition'
 
@@ -19,22 +19,22 @@ const entry: FoodEntry = {
 
 describe('MealSection', () => {
   it('renders the meal name as a heading', () => {
-    render(<MealSection meal="Breakfast" entries={[]} />)
+    render(<MealSection meal="Breakfast" entries={[]} onDelete={() => {}} />)
     expect(screen.getByRole('heading', { name: 'Breakfast' })).toBeInTheDocument()
   })
 
   it('shows a friendly empty state when there are no entries', () => {
-    render(<MealSection meal="Breakfast" entries={[]} />)
+    render(<MealSection meal="Breakfast" entries={[]} onDelete={() => {}} />)
     expect(screen.getByText('No food logged for breakfast yet.')).toBeInTheDocument()
   })
 
   it('lowercases the meal name in the empty state', () => {
-    render(<MealSection meal="Snacks" entries={[]} />)
+    render(<MealSection meal="Snacks" entries={[]} onDelete={() => {}} />)
     expect(screen.getByText('No food logged for snacks yet.')).toBeInTheDocument()
   })
 
   it('renders a row per entry with description, calories and macros', () => {
-    render(<MealSection meal="Breakfast" entries={[entry]} />)
+    render(<MealSection meal="Breakfast" entries={[entry]} onDelete={() => {}} />)
     expect(screen.getByText('Greek yogurt')).toBeInTheDocument()
     expect(screen.getByText('320 kcal')).toBeInTheDocument()
     expect(screen.getByText('P 22')).toBeInTheDocument()
@@ -43,5 +43,28 @@ describe('MealSection', () => {
     expect(screen.getByText('Fb 5')).toBeInTheDocument()
     // empty-state copy should NOT be present when there are entries
     expect(screen.queryByText(/No food logged/)).not.toBeInTheDocument()
+  })
+
+  describe('delete control', () => {
+    afterEach(() => vi.restoreAllMocks())
+
+    it('deletes the entry by id once the confirmation is accepted', () => {
+      const onDelete = vi.fn()
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      render(<MealSection meal="Breakfast" entries={[entry]} onDelete={onDelete} />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Greek yogurt' }))
+      expect(window.confirm).toHaveBeenCalledOnce()
+      expect(onDelete).toHaveBeenCalledWith('1')
+    })
+
+    it('does not delete when the confirmation is dismissed', () => {
+      const onDelete = vi.fn()
+      vi.spyOn(window, 'confirm').mockReturnValue(false)
+      render(<MealSection meal="Breakfast" entries={[entry]} onDelete={onDelete} />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Greek yogurt' }))
+      expect(onDelete).not.toHaveBeenCalled()
+    })
   })
 })
