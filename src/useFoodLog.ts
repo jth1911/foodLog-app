@@ -7,6 +7,7 @@ import {
   type Goals,
 } from './lib/nutrition'
 import { localStorageStore, type FoodLogStore } from './lib/foodLogRepo'
+import { seedFoodsFromJson, type UserFoodReference } from './lib/foods'
 import { isoWeekOf, weekdayOf } from './lib/dates'
 
 // Fixed date the demo entries live on, decoupled from the real "today" the app
@@ -92,6 +93,9 @@ export type FoodLog = {
   // The effective-dated goal history, sorted ascending by effectiveDate. The
   // store guarantees at least one entry, so every date resolves to a goal.
   goalHistory: GoalChange[]
+  // The user-managed reference foods, keyed by category. Seeded from the static
+  // JSON on first load, then the sole source of truth.
+  foods: Record<string, UserFoodReference[]>
   addEntry: (entry: FoodEntry) => void
   deleteEntry: (id: string) => void
   // Append (or, for an existing effective date, replace) a goal change.
@@ -99,6 +103,13 @@ export type FoodLog = {
   // Delete the change at this effective date. No-op on the last remaining entry
   // so a date can always resolve to a real goal.
   deleteGoalChange: (effectiveDate: string) => void
+  // Reference-food mutations. addFood stamps a fresh id; updateFood replaces by
+  // id within its category; deleteFood/Category remove by id/name.
+  addFood: (category: string, food: Omit<UserFoodReference, 'id'>) => void
+  updateFood: (category: string, food: UserFoodReference) => void
+  deleteFood: (category: string, id: string) => void
+  addCategory: (name: string) => void
+  deleteCategory: (name: string) => void
 }
 
 const byEffectiveDate = (a: GoalChange, b: GoalChange) =>
@@ -128,6 +139,9 @@ function initialGoalHistory(store: FoodLogStore): GoalChange[] {
 export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   const [entries, setEntries] = useState<FoodEntry[]>(() => store.loadEntries() ?? SEED_FOODS)
   const [goalHistory, setGoalHistory] = useState<GoalChange[]>(() => initialGoalHistory(store))
+  const [foods, setFoods] = useState<Record<string, UserFoodReference[]>>(
+    () => store.loadFoods() ?? seedFoodsFromJson(),
+  )
 
   // Persist on every change, and on mount (which writes the initial seed/
   // migrated history back, so a later edited-to-one state isn't re-migrated).
@@ -137,6 +151,9 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   useEffect(() => {
     store.saveGoalHistory(goalHistory)
   }, [store, goalHistory])
+  useEffect(() => {
+    store.saveFoods(foods)
+  }, [store, foods])
 
   const addEntry = useCallback((entry: FoodEntry) => {
     setEntries((prev) => [...prev, entry])
@@ -164,5 +181,51 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
     )
   }, [])
 
-  return { entries, goalHistory, addEntry, deleteEntry, addGoalChange, deleteGoalChange }
+  const addFood = useCallback((category: string, food: Omit<UserFoodReference, 'id'>) => {
+    const withId: UserFoodReference = { ...food, id: crypto.randomUUID() }
+    setFoods((prev) => ({ ...prev, [category]: [...(prev[category] ?? []), withId] }))
+  }, [])
+
+  const updateFood = useCallback((category: string, food: UserFoodReference) => {
+    setFoods((prev) => ({
+      ...prev,
+      [category]: (prev[category] ?? []).map((f) => (f.id === food.id ? food : f)),
+    }))
+  }, [])
+
+  const deleteFood = useCallback((category: string, id: string) => {
+    setFoods((prev) => ({
+      ...prev,
+      [category]: (prev[category] ?? []).filter((f) => f.id !== id),
+    }))
+  }, [])
+
+  // Add an empty named bucket. A name that already exists is left untouched so
+  // adding doesn't wipe an existing category's foods.
+  const addCategory = useCallback((name: string) => {
+    setFoods((prev) => (name in prev ? prev : { ...prev, [name]: [] }))
+  }, [])
+
+  const deleteCategory = useCallback((name: string) => {
+    setFoods((prev) => {
+      const next = { ...prev }
+      delete next[name]
+      return next
+    })
+  }, [])
+
+  return {
+    entries,
+    goalHistory,
+    foods,
+    addEntry,
+    deleteEntry,
+    addGoalChange,
+    deleteGoalChange,
+    addFood,
+    updateFood,
+    deleteFood,
+    addCategory,
+    deleteCategory,
+  }
 }

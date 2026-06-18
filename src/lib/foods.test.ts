@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest'
-import { foodCategories, normaliseMacro, roundMacro, scaleMacros, type FoodReference } from './foods'
+import {
+  foodCategories,
+  normaliseMacro,
+  roundMacro,
+  scaleMacros,
+  seedFoodsFromJson,
+  type FoodReference,
+} from './foods'
 import { MACRO_KEYS } from './nutrition'
 
 describe('normaliseMacro', () => {
@@ -101,5 +108,38 @@ describe('foodCategories', () => {
       expect(food.food.length).toBeGreaterThan(0)
       expect(typeof food.serving_size).toBe('string')
     }
+  })
+})
+
+describe('seedFoodsFromJson', () => {
+  it('keeps every category from the JSON', () => {
+    const seeded = seedFoodsFromJson()
+    expect(Object.keys(seeded)).toEqual(Object.keys(foodCategories))
+  })
+
+  it('normalises macro strings to plain numbers', () => {
+    const seeded = seedFoodsFromJson()
+    // "Egg" → protein 6, carbs 1, calories 70; all numbers, not strings.
+    const egg = seeded['Dairy/Eggs'].find((f) => f.food === 'Egg')!
+    expect(egg).toMatchObject({ serving_size: '1 large', protein: 6, carbs: 1, calories: 70 })
+    for (const key of ['protein', 'carbs', 'calories'] as const) {
+      expect(typeof egg[key]).toBe('number')
+    }
+  })
+
+  it('applies the range and "<1" rules from normaliseMacro', () => {
+    const seeded = seedFoodsFromJson()
+    // String cheese carbs "<1" → 1; non-fat milk calories "80-90" → lower bound 80.
+    const cheese = seeded['Dairy/Eggs'].find((f) => f.food === 'String cheese (low fat)')!
+    expect(cheese.carbs).toBe(1)
+    const milk = seeded['Dairy/Eggs'].find((f) => f.food === 'Non-fat Milk (Skim)')!
+    expect(milk.calories).toBe(80)
+  })
+
+  it('stamps every food with a unique id', () => {
+    const all = Object.values(seedFoodsFromJson()).flat()
+    const ids = all.map((f) => f.id)
+    expect(new Set(ids).size).toBe(ids.length)
+    expect(ids.every((id) => typeof id === 'string' && id.length > 0)).toBe(true)
   })
 })

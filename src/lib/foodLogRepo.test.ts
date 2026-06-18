@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ENTRIES_KEY, GOALS_KEY, GOAL_HISTORY_KEY, localStorageStore } from './foodLogRepo'
+import { ENTRIES_KEY, FOODS_KEY, GOALS_KEY, GOAL_HISTORY_KEY, localStorageStore } from './foodLogRepo'
 import { DEFAULT_GOALS, type FoodEntry, type GoalChange } from './nutrition'
+import { type UserFoodReference } from './foods'
 
 const baseEntry: FoodEntry = {
   id: 'abc',
@@ -85,6 +86,44 @@ describe('localStorageStore', () => {
   it('accepts a well-formed goal history', () => {
     localStorage.setItem(GOAL_HISTORY_KEY, JSON.stringify(baseHistory))
     expect(localStorageStore.loadGoalHistory()).toEqual(baseHistory)
+  })
+
+  const baseFoods: Record<string, UserFoodReference[]> = {
+    'Dairy/Eggs': [
+      { id: 'f1', food: 'Egg', serving_size: '1 large', protein: 6, carbs: 1, calories: 70 },
+    ],
+    Custom: [
+      { id: 'f2', food: 'Protein bar', serving_size: '1 bar', protein: 20, carbs: 25, calories: 210, fat: 7, fiber: 3 },
+    ],
+  }
+
+  it('round-trips user foods through localStorage', () => {
+    localStorageStore.saveFoods(baseFoods)
+    expect(localStorageStore.loadFoods()).toEqual(baseFoods)
+    expect(localStorage.getItem(FOODS_KEY)).toContain('Protein bar')
+  })
+
+  it('persists an empty foods record distinctly from "nothing stored"', () => {
+    expect(localStorageStore.loadFoods()).toBeNull()
+    localStorageStore.saveFoods({})
+    expect(localStorageStore.loadFoods()).toEqual({})
+  })
+
+  it('rejects wrong-shaped foods (non-object, non-array values, bad macros)', () => {
+    // Top-level must be a plain object of category → foods.
+    for (const bad of ['[]', '42', 'null', '"x"']) {
+      localStorage.setItem(FOODS_KEY, bad)
+      expect(localStorageStore.loadFoods()).toBeNull()
+    }
+    // A category whose value isn't an array.
+    localStorage.setItem(FOODS_KEY, JSON.stringify({ Dairy: {} }))
+    expect(localStorageStore.loadFoods()).toBeNull()
+    // A food missing a required numeric macro (protein) falls back.
+    localStorage.setItem(
+      FOODS_KEY,
+      JSON.stringify({ Dairy: [{ id: 'f1', food: 'Egg', serving_size: '1 large', carbs: 1, calories: 70 }] }),
+    )
+    expect(localStorageStore.loadFoods()).toBeNull()
   })
 
   it('reads a legacy single goal for migration', () => {
