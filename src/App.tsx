@@ -4,6 +4,7 @@ import FoodsPage from './FoodsPage'
 import GoalsPage from './GoalsPage'
 import { useFoodLog } from './useFoodLog'
 import { type NewFoodInput } from './AddFoodModal'
+import LogViewer from './LogViewer'
 
 type Tab = 'dashboard' | 'foods' | 'goals'
 
@@ -90,6 +91,9 @@ function App() {
           onDelete={foodLog.deleteGoalChange}
         />
       </div>
+
+      {/* Always-visible floating launcher for the persisted event log. */}
+      <LogViewer />
     </div>
   )
 }
