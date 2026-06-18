@@ -4,6 +4,7 @@
 
 import { MACRO_KEYS, type FoodEntry, type GoalChange, type Goals } from './nutrition'
 import { type UserFoodReference } from './foods'
+import { type WeightEntry } from './weight'
 
 // Versioned keys so a future shape change can migrate (or ignore) old data
 // rather than mis-reading it.
@@ -16,6 +17,11 @@ export const GOAL_HISTORY_KEY = 'foodlog:goalHistory:v1'
 // The user-managed reference foods (#28): a Record of category → foods. Seeded
 // once from the static JSON, then the sole source of truth.
 export const FOODS_KEY = 'foodlog:foods:v1'
+// Daily body-weight log (#45): a list of { date, lb } sorted ascending, gaps
+// materialised forward by the carry-forward rule. See src/lib/weight.ts.
+export const WEIGHTS_KEY = 'foodlog:weights:v1'
+// The single target weight in pounds (#45). A lone number, not effective-dated.
+export const TARGET_WEIGHT_KEY = 'foodlog:targetWeight:v1'
 
 /** A durable store for the single local user's food log. */
 export type FoodLogStore = {
@@ -27,6 +33,12 @@ export type FoodLogStore = {
   saveGoalHistory(history: GoalChange[]): void
   loadFoods(): Record<string, UserFoodReference[]> | null
   saveFoods(foods: Record<string, UserFoodReference[]>): void
+  loadWeights(): WeightEntry[] | null
+  saveWeights(weights: WeightEntry[]): void
+  // The target weight in pounds, or null when none has been set or the stored
+  // value is missing/corrupt.
+  loadTargetWeight(): number | null
+  saveTargetWeight(lb: number): void
   // Read-only access to the legacy single goal, for one-time migration into the
   // history. Returns null when there's nothing legacy to migrate.
   loadLegacyGoals(): Goals | null
@@ -113,6 +125,25 @@ function isUserFoods(value: unknown): value is Record<string, UserFoodReference[
   )
 }
 
+// A stored weight log must be an array whose every entry carries a string date
+// and a finite numeric lb; anything else falls back rather than feeding bad
+// shapes to the carry-forward logic.
+function isWeightEntry(value: unknown): value is WeightEntry {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const { date, lb } = value as Record<string, unknown>
+  return typeof date === 'string' && Number.isFinite(lb)
+}
+
+function isWeightEntryArray(value: unknown): value is WeightEntry[] {
+  return Array.isArray(value) && value.every(isWeightEntry)
+}
+
+// A stored target weight must be a finite, positive number; zero/negative/NaN or
+// any non-number is treated as "no target set".
+function isTargetWeight(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+}
+
 function saveJson(key: string, value: unknown): void {
   const storage = getStorage()
   if (!storage) return
@@ -132,5 +163,9 @@ export const localStorageStore: FoodLogStore = {
   saveGoalHistory: (history) => saveJson(GOAL_HISTORY_KEY, history),
   loadFoods: () => loadJson(FOODS_KEY, isUserFoods),
   saveFoods: (foods) => saveJson(FOODS_KEY, foods),
+  loadWeights: () => loadJson(WEIGHTS_KEY, isWeightEntryArray),
+  saveWeights: (weights) => saveJson(WEIGHTS_KEY, weights),
+  loadTargetWeight: () => loadJson(TARGET_WEIGHT_KEY, isTargetWeight),
+  saveTargetWeight: (lb) => saveJson(TARGET_WEIGHT_KEY, lb),
   loadLegacyGoals: () => loadJson(GOALS_KEY, isGoals),
 }

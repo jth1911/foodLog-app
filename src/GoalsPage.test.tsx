@@ -11,7 +11,7 @@ const history: GoalChange[] = [
 
 describe('GoalsPage', () => {
   it('lists entries newest-first', () => {
-    render(<GoalsPage goalHistory={history} onAdd={() => {}} onDelete={() => {}} />)
+    render(<GoalsPage goalHistory={history} onAdd={() => {}} onDelete={() => {}} targetWeight={null} onSetTargetWeight={() => {}} />)
     const rows = screen.getByRole('region', { name: 'Goal history' })
     const labels = within(rows)
       .getAllByText(/Initial goal|May 2026/)
@@ -21,14 +21,14 @@ describe('GoalsPage', () => {
   })
 
   it('labels the sentinel-dated entry as the initial goal', () => {
-    render(<GoalsPage goalHistory={history} onAdd={() => {}} onDelete={() => {}} />)
+    render(<GoalsPage goalHistory={history} onAdd={() => {}} onDelete={() => {}} targetWeight={null} onSetTargetWeight={() => {}} />)
     expect(screen.getByText('Initial goal')).toBeInTheDocument()
   })
 
   it('calls onDelete with the entry effective date', async () => {
     const onDelete = vi.fn()
     const user = userEvent.setup()
-    render(<GoalsPage goalHistory={history} onAdd={() => {}} onDelete={onDelete} />)
+    render(<GoalsPage goalHistory={history} onAdd={() => {}} onDelete={onDelete} targetWeight={null} onSetTargetWeight={() => {}} />)
 
     await user.click(screen.getByRole('button', { name: /Delete goal change 1 May 2026/ }))
     expect(onDelete).toHaveBeenCalledWith('2026-05-01')
@@ -36,7 +36,7 @@ describe('GoalsPage', () => {
 
   it('disables delete when only one entry remains', () => {
     const single: GoalChange[] = [{ effectiveDate: GOALS_EPOCH, goals: DEFAULT_GOALS }]
-    render(<GoalsPage goalHistory={single} onAdd={() => {}} onDelete={() => {}} />)
+    render(<GoalsPage goalHistory={single} onAdd={() => {}} onDelete={() => {}} targetWeight={null} onSetTargetWeight={() => {}} />)
     expect(screen.getByRole('button', { name: /Delete goal change/ })).toBeDisabled()
   })
 
@@ -44,7 +44,14 @@ describe('GoalsPage', () => {
     const onAdd = vi.fn()
     const user = userEvent.setup()
     render(
-      <GoalsPage goalHistory={history} onAdd={onAdd} onDelete={() => {}} today="2026-06-17" />,
+      <GoalsPage
+        goalHistory={history}
+        onAdd={onAdd}
+        onDelete={() => {}}
+        targetWeight={null}
+        onSetTargetWeight={() => {}}
+        today="2026-06-17"
+      />,
     )
 
     await user.type(screen.getByLabelText('Calories goal'), '2100')
@@ -67,7 +74,14 @@ describe('GoalsPage', () => {
     const onAdd = vi.fn()
     const user = userEvent.setup()
     render(
-      <GoalsPage goalHistory={history} onAdd={onAdd} onDelete={() => {}} today="2026-06-17" />,
+      <GoalsPage
+        goalHistory={history}
+        onAdd={onAdd}
+        onDelete={() => {}}
+        targetWeight={null}
+        onSetTargetWeight={() => {}}
+        today="2026-06-17"
+      />,
     )
 
     // Fill everything except protein.
@@ -79,5 +93,59 @@ describe('GoalsPage', () => {
 
     expect(onAdd).not.toHaveBeenCalled()
     expect(screen.getByRole('alert')).toHaveTextContent(/Protein must be a non-negative number/)
+  })
+
+  describe('target weight', () => {
+    it('pre-fills the input with the stored target weight', () => {
+      render(
+        <GoalsPage
+          goalHistory={history}
+          onAdd={() => {}}
+          onDelete={() => {}}
+          targetWeight={165}
+          onSetTargetWeight={() => {}}
+        />,
+      )
+      expect(screen.getByLabelText('Target weight (lb)')).toHaveValue(165)
+    })
+
+    it('saves an entered target weight', async () => {
+      const onSetTargetWeight = vi.fn()
+      const user = userEvent.setup()
+      render(
+        <GoalsPage
+          goalHistory={history}
+          onAdd={() => {}}
+          onDelete={() => {}}
+          targetWeight={null}
+          onSetTargetWeight={onSetTargetWeight}
+        />,
+      )
+
+      const region = screen.getByRole('region', { name: 'Target weight' })
+      await user.type(screen.getByLabelText('Target weight (lb)'), '170')
+      await user.click(within(region).getByRole('button', { name: 'Save' }))
+      expect(onSetTargetWeight).toHaveBeenCalledWith(170)
+    })
+
+    it('rejects a non-positive target weight', async () => {
+      const onSetTargetWeight = vi.fn()
+      const user = userEvent.setup()
+      render(
+        <GoalsPage
+          goalHistory={history}
+          onAdd={() => {}}
+          onDelete={() => {}}
+          targetWeight={null}
+          onSetTargetWeight={onSetTargetWeight}
+        />,
+      )
+
+      const region = screen.getByRole('region', { name: 'Target weight' })
+      await user.type(screen.getByLabelText('Target weight (lb)'), '-5')
+      await user.click(within(region).getByRole('button', { name: 'Save' }))
+      expect(onSetTargetWeight).not.toHaveBeenCalled()
+      expect(within(region).getByRole('alert')).toHaveTextContent(/greater than zero/i)
+    })
   })
 })

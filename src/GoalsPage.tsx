@@ -14,8 +14,76 @@ type GoalsPageProps = {
   goalHistory: GoalChange[]
   onAdd: (effectiveDate: string, goals: Goals) => void
   onDelete: (effectiveDate: string) => void
+  // The single target weight in pounds, or null when none is set yet.
+  targetWeight: number | null
+  onSetTargetWeight: (lb: number) => void
   // The date the add form defaults to; injectable so tests pin a known day.
   today?: string
+}
+
+/**
+ * The target-weight card: a single editable goal weight in pounds (not
+ * effective-dated like the macro goals — one value for v1). The report charts
+ * overlay it as a reference line. The caller keys this on the stored value, so a
+ * saved/loaded change remounts it with the new number.
+ */
+function TargetWeightCard({
+  targetWeight,
+  onSave,
+}: {
+  targetWeight: number | null
+  onSave: (lb: number) => void
+}) {
+  const [value, setValue] = useState(targetWeight != null ? String(targetWeight) : '')
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const lb = Number(value.trim())
+    if (value.trim() === '' || !Number.isFinite(lb) || lb <= 0) {
+      setError('Enter a target weight greater than zero.')
+      return
+    }
+    onSave(lb)
+    setError(null)
+  }
+
+  return (
+    <section
+      aria-label="Target weight"
+      className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:w-72"
+    >
+      <h2 className="mb-1 text-lg font-semibold text-slate-900">Target weight</h2>
+      <p className="mb-4 text-sm text-slate-500">
+        Shown as a reference line on the weekly and monthly weight charts.
+      </p>
+      <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2" noValidate>
+        <input
+          type="number"
+          min="0"
+          step="any"
+          inputMode="decimal"
+          aria-label="Target weight (lb)"
+          placeholder="—"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="w-28 rounded-md border border-slate-300 px-3 py-2 text-right text-slate-800 focus:border-slate-500 focus:outline-none"
+        />
+        <span className="text-sm text-slate-500">lb</span>
+        <button
+          type="submit"
+          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 focus:outline-none"
+        >
+          Save
+        </button>
+        {error && (
+          <p role="alert" className="w-full text-sm text-rose-600">
+            {error}
+          </p>
+        )}
+      </form>
+    </section>
+  )
 }
 
 // Readable label for an effective date, formatted in UTC to match the rest of
@@ -48,7 +116,14 @@ const blankMacros: Record<MacroKey, string> = {
  * form to append a new change. Owns only its draft form state — the history is
  * the caller's single source of truth, mutated via onAdd/onDelete.
  */
-function GoalsPage({ goalHistory, onAdd, onDelete, today = todayIso() }: GoalsPageProps) {
+function GoalsPage({
+  goalHistory,
+  onAdd,
+  onDelete,
+  targetWeight,
+  onSetTargetWeight,
+  today = todayIso(),
+}: GoalsPageProps) {
   const [effectiveDate, setEffectiveDate] = useState(today)
   const [macros, setMacros] = useState<Record<MacroKey, string>>(blankMacros)
   const [error, setError] = useState<string | null>(null)
@@ -128,6 +203,15 @@ function GoalsPage({ goalHistory, onAdd, onDelete, today = todayIso() }: GoalsPa
           ))}
         </section>
 
+        <div className="flex flex-col gap-6">
+        {/* Single target weight. Keyed on the stored value so a save/load
+            remounts the field with the new number. */}
+        <TargetWeightCard
+          key={targetWeight ?? 'none'}
+          targetWeight={targetWeight}
+          onSave={onSetTargetWeight}
+        />
+
         {/* Add-goal-change form */}
         <aside
           aria-label="Add goal change"
@@ -184,6 +268,7 @@ function GoalsPage({ goalHistory, onAdd, onDelete, today = todayIso() }: GoalsPa
             </button>
           </form>
         </aside>
+        </div>
       </div>
     </div>
   )

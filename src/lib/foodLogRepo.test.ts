@@ -1,7 +1,16 @@
 import { afterEach, beforeEach, describe, expect, it } from 'vitest'
-import { ENTRIES_KEY, FOODS_KEY, GOALS_KEY, GOAL_HISTORY_KEY, localStorageStore } from './foodLogRepo'
+import {
+  ENTRIES_KEY,
+  FOODS_KEY,
+  GOALS_KEY,
+  GOAL_HISTORY_KEY,
+  TARGET_WEIGHT_KEY,
+  WEIGHTS_KEY,
+  localStorageStore,
+} from './foodLogRepo'
 import { DEFAULT_GOALS, type FoodEntry, type GoalChange } from './nutrition'
 import { type UserFoodReference } from './foods'
+import { type WeightEntry } from './weight'
 
 const baseEntry: FoodEntry = {
   id: 'abc',
@@ -124,6 +133,47 @@ describe('localStorageStore', () => {
       JSON.stringify({ Dairy: [{ id: 'f1', food: 'Egg', serving_size: '1 large', carbs: 1, calories: 70 }] }),
     )
     expect(localStorageStore.loadFoods()).toBeNull()
+  })
+
+  const baseWeights: WeightEntry[] = [
+    { date: '2026-06-01', lb: 180 },
+    { date: '2026-06-02', lb: 179.5 },
+  ]
+
+  it('round-trips the weight log through localStorage', () => {
+    localStorageStore.saveWeights(baseWeights)
+    expect(localStorageStore.loadWeights()).toEqual(baseWeights)
+    expect(localStorage.getItem(WEIGHTS_KEY)).toContain('180')
+  })
+
+  it('persists an empty weight log distinctly from "nothing stored"', () => {
+    expect(localStorageStore.loadWeights()).toBeNull()
+    localStorageStore.saveWeights([])
+    expect(localStorageStore.loadWeights()).toEqual([])
+  })
+
+  it('rejects wrong-shaped weight logs (non-array, bad date/lb)', () => {
+    for (const bad of ['{}', '42', 'null', '"x"']) {
+      localStorage.setItem(WEIGHTS_KEY, bad)
+      expect(localStorageStore.loadWeights()).toBeNull()
+    }
+    // An entry missing its date, and one with a non-finite lb, both fall back.
+    localStorage.setItem(WEIGHTS_KEY, JSON.stringify([{ lb: 180 }]))
+    expect(localStorageStore.loadWeights()).toBeNull()
+    localStorage.setItem(WEIGHTS_KEY, JSON.stringify([{ date: '2026-06-01', lb: 'heavy' }]))
+    expect(localStorageStore.loadWeights()).toBeNull()
+  })
+
+  it('round-trips the target weight through localStorage', () => {
+    localStorageStore.saveTargetWeight(165)
+    expect(localStorageStore.loadTargetWeight()).toBe(165)
+  })
+
+  it('rejects a non-positive or non-numeric target weight', () => {
+    for (const bad of ['0', '-5', '"170"', 'null', 'true']) {
+      localStorage.setItem(TARGET_WEIGHT_KEY, bad)
+      expect(localStorageStore.loadTargetWeight()).toBeNull()
+    }
   })
 
   it('reads a legacy single goal for migration', () => {

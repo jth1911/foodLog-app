@@ -238,15 +238,17 @@ describe('Dashboard', () => {
           today="2026-05-01"
           loggedFoods={[scaled]}
           goalHistory={[{ effectiveDate: GOALS_EPOCH, goals: DEFAULT_GOALS }]}
+          weights={[]}
           addEntry={() => {}}
           addEntries={() => {}}
           deleteEntry={() => {}}
           updateEntry={updateEntry}
+          setWeight={() => {}}
         />,
       )
 
       await user.click(screen.getByRole('button', { name: 'Edit Egg' }))
-      await user.click(screen.getByRole('button', { name: 'Save' }))
+      await user.click(within(screen.getByRole('dialog')).getByRole('button', { name: 'Save' }))
 
       expect(updateEntry).toHaveBeenCalledTimes(1)
       const updated = updateEntry.mock.calls[0][0] as FoodEntry
@@ -268,10 +270,12 @@ describe('Dashboard', () => {
           today="2026-05-01"
           loggedFoods={[]}
           goalHistory={[{ effectiveDate: GOALS_EPOCH, goals: DEFAULT_GOALS }]}
+          weights={[]}
           addEntry={() => {}}
           addEntries={() => {}}
           deleteEntry={() => {}}
           updateEntry={() => {}}
+          setWeight={() => {}}
         />,
       )
 
@@ -287,10 +291,12 @@ describe('Dashboard', () => {
           today="2026-05-01"
           loggedFoods={[]}
           goalHistory={[{ effectiveDate: GOALS_EPOCH, goals: DEFAULT_GOALS }]}
+          weights={[]}
           addEntry={() => {}}
           addEntries={addEntries}
           deleteEntry={() => {}}
           updateEntry={() => {}}
+          setWeight={() => {}}
         />,
       )
 
@@ -324,10 +330,12 @@ describe('Dashboard', () => {
           today={today}
           loggedFoods={[]}
           goalHistory={history}
+          weights={[]}
           addEntry={() => {}}
           addEntries={() => {}}
           deleteEntry={() => {}}
           updateEntry={() => {}}
+          setWeight={() => {}}
         />,
       )
 
@@ -345,6 +353,67 @@ describe('Dashboard', () => {
       // Step back across the 2026-05-01 boundary → the earlier 120 goal applies.
       fireEvent.click(screen.getByRole('button', { name: 'Previous day' }))
       expect(protein).toHaveTextContent('/ 120')
+    })
+  })
+
+  describe('weight card', () => {
+    const weights = [
+      { date: '2026-05-01', lb: 180 },
+      { date: '2026-05-02', lb: 180 }, // carried-forward copy
+      { date: '2026-05-03', lb: 178 },
+    ]
+    const renderView = (today: string, setWeight = () => {}) =>
+      render(
+        <DashboardView
+          today={today}
+          loggedFoods={[]}
+          goalHistory={[{ effectiveDate: GOALS_EPOCH, goals: DEFAULT_GOALS }]}
+          weights={weights}
+          addEntry={() => {}}
+          addEntries={() => {}}
+          deleteEntry={() => {}}
+          updateEntry={() => {}}
+          setWeight={setWeight}
+        />,
+      )
+
+    it('shows the resolved (carried-forward) weight for the selected day', () => {
+      renderView('2026-05-02')
+      expect(screen.getByLabelText('Weight (lb)')).toHaveValue(180)
+    })
+
+    it('updates the field as the selected day changes', () => {
+      renderView('2026-05-03')
+      expect(screen.getByLabelText('Weight (lb)')).toHaveValue(178)
+      fireEvent.click(screen.getByRole('button', { name: 'Previous day' }))
+      expect(screen.getByLabelText('Weight (lb)')).toHaveValue(180) // carried on 05-02
+    })
+
+    it('saves the entered weight for the selected day', async () => {
+      const user = userEvent.setup()
+      const setWeight = vi.fn()
+      renderView('2026-05-03', setWeight)
+
+      const input = screen.getByLabelText('Weight (lb)')
+      await user.clear(input)
+      await user.type(input, '177.5')
+      await user.click(within(screen.getByRole('region', { name: 'Weight' })).getByRole('button', { name: 'Save' }))
+
+      expect(setWeight).toHaveBeenCalledWith('2026-05-03', 177.5)
+    })
+
+    it('rejects a non-positive weight', async () => {
+      const user = userEvent.setup()
+      const setWeight = vi.fn()
+      renderView('2026-05-03', setWeight)
+
+      const input = screen.getByLabelText('Weight (lb)')
+      await user.clear(input)
+      await user.type(input, '0')
+      await user.click(within(screen.getByRole('region', { name: 'Weight' })).getByRole('button', { name: 'Save' }))
+
+      expect(setWeight).not.toHaveBeenCalled()
+      expect(screen.getByRole('alert')).toHaveTextContent(/greater than zero/i)
     })
   })
 })

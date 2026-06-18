@@ -8,7 +8,8 @@ import {
 } from './lib/nutrition'
 import { localStorageStore, type FoodLogStore } from './lib/foodLogRepo'
 import { seedFoodsFromJson, type UserFoodReference } from './lib/foods'
-import { isoWeekOf, weekdayOf } from './lib/dates'
+import { materialiseWeights, type WeightEntry } from './lib/weight'
+import { isoWeekOf, todayIso, weekdayOf } from './lib/dates'
 import { log } from './lib/logger'
 
 // Fixed date the demo entries live on, decoupled from the real "today" the app
@@ -89,6 +90,17 @@ export const SEED_FOODS: FoodEntry[] = [
   },
 ]
 
+// A short, slightly-varied starting weight series on the demo week, so the
+// first-run reports show a real-looking trend rather than an empty chart. Only
+// seeded when storage is empty; the carry-forward fill extends it to today.
+export const SEED_WEIGHTS: WeightEntry[] = [
+  { date: '2026-05-01', lb: 182 },
+  { date: '2026-05-02', lb: 181.6 },
+  { date: '2026-05-03', lb: 181.9 },
+  { date: '2026-05-04', lb: 181.2 },
+  { date: '2026-05-05', lb: 180.8 },
+]
+
 export type FoodLog = {
   entries: FoodEntry[]
   // The effective-dated goal history, sorted ascending by effectiveDate. The
@@ -97,6 +109,11 @@ export type FoodLog = {
   // The user-managed reference foods, keyed by category. Seeded from the static
   // JSON on first load, then the sole source of truth.
   foods: Record<string, UserFoodReference[]>
+  // The daily weight log, sorted ascending with carry-forward gaps materialised
+  // up to today (so a day without an explicit weigh-in still has a value).
+  weights: WeightEntry[]
+  // The target weight in pounds, or null when none has been set yet.
+  targetWeight: number | null
   addEntry: (entry: FoodEntry) => void
   // Append a batch of entries in one update, e.g. a CSV bulk import.
   addEntries: (entries: FoodEntry[]) => void
@@ -115,10 +132,17 @@ export type FoodLog = {
   deleteFood: (category: string, id: string) => void
   addCategory: (name: string) => void
   deleteCategory: (name: string) => void
+  // Record (or overwrite) the weight for a day. Editing an inherited day writes
+  // a real entry for it; the carry-forward fill is re-applied up to today.
+  setWeight: (date: string, lb: number) => void
+  // Set the single target weight (pounds).
+  setTargetWeight: (lb: number) => void
 }
 
 const byEffectiveDate = (a: GoalChange, b: GoalChange) =>
   a.effectiveDate.localeCompare(b.effectiveDate)
+
+const byWeightDate = (a: WeightEntry, b: WeightEntry) => a.date.localeCompare(b.date)
 
 // Resolve the initial goal history: a stored history wins; otherwise migrate a
 // legacy single goal into one epoch-dated entry; otherwise seed the defaults.
@@ -147,6 +171,14 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   const [foods, setFoods] = useState<Record<string, UserFoodReference[]>>(
     () => store.loadFoods() ?? seedFoodsFromJson(),
   )
+  // Materialise the carry-forward copies up to today on load, so a return visit
+  // on a new day fills the days since the last weigh-in.
+  const [weights, setWeights] = useState<WeightEntry[]>(() =>
+    materialiseWeights(store.loadWeights() ?? SEED_WEIGHTS, todayIso()),
+  )
+  const [targetWeight, setTargetWeightState] = useState<number | null>(() =>
+    store.loadTargetWeight(),
+  )
 
   // Persist on every change, and on mount (which writes the initial seed/
   // migrated history back, so a later edited-to-one state isn't re-migrated).
@@ -159,6 +191,14 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   useEffect(() => {
     store.saveFoods(foods)
   }, [store, foods])
+  useEffect(() => {
+    store.saveWeights(weights)
+  }, [store, weights])
+  // Persist a target once one is set. There's no clearing in v1, so a null
+  // target (never set) simply leaves the key absent.
+  useEffect(() => {
+    if (targetWeight !== null) store.saveTargetWeight(targetWeight)
+  }, [store, targetWeight])
 
   const addEntry = useCallback((entry: FoodEntry) => {
     log('info', 'Entry added', { description: entry.description, date: entry.date })
@@ -239,10 +279,29 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
     })
   }, [])
 
+  // Upsert the day's weight (a re-entry replaces it), then re-materialise the
+  // carry-forward fill up to today so downstream days inherit the new value.
+  const setWeight = useCallback((date: string, lb: number) => {
+    log('info', 'Weight logged', { date, lb })
+    setWeights((prev) =>
+      materialiseWeights(
+        [...prev.filter((w) => w.date !== date), { date, lb }].sort(byWeightDate),
+        todayIso(),
+      ),
+    )
+  }, [])
+
+  const setTargetWeight = useCallback((lb: number) => {
+    log('info', 'Target weight set', { lb })
+    setTargetWeightState(lb)
+  }, [])
+
   return {
     entries,
     goalHistory,
     foods,
+    weights,
+    targetWeight,
     addEntry,
     addEntries,
     updateEntry,
@@ -254,5 +313,7 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
     deleteFood,
     addCategory,
     deleteCategory,
+    setWeight,
+    setTargetWeight,
   }
 }

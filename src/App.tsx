@@ -72,10 +72,12 @@ function App() {
           onPrefillConsumed={() => setPrefill(null)}
           loggedFoods={foodLog.entries}
           goalHistory={foodLog.goalHistory}
+          weights={foodLog.weights}
           addEntry={foodLog.addEntry}
           addEntries={foodLog.addEntries}
           updateEntry={foodLog.updateEntry}
           deleteEntry={foodLog.deleteEntry}
+          setWeight={foodLog.setWeight}
         />
       </div>
       <div hidden={activeTab !== 'foods'}>
@@ -94,6 +96,8 @@ function App() {
           goalHistory={foodLog.goalHistory}
           onAdd={foodLog.addGoalChange}
           onDelete={foodLog.deleteGoalChange}
+          targetWeight={foodLog.targetWeight}
+          onSetTargetWeight={foodLog.setTargetWeight}
         />
       </div>
       <div hidden={activeTab !== 'weekly'}>
@@ -101,10 +105,17 @@ function App() {
           loggedFoods={foodLog.entries}
           goalHistory={foodLog.goalHistory}
           foods={foodLog.foods}
+          weights={foodLog.weights}
+          targetWeight={foodLog.targetWeight}
         />
       </div>
       <div hidden={activeTab !== 'monthly'}>
-        <MonthlyReport loggedFoods={foodLog.entries} goalHistory={foodLog.goalHistory} />
+        <MonthlyReport
+          loggedFoods={foodLog.entries}
+          goalHistory={foodLog.goalHistory}
+          weights={foodLog.weights}
+          targetWeight={foodLog.targetWeight}
+        />
       </div>
 
       {/* Always-visible floating launcher for the persisted event log. */}

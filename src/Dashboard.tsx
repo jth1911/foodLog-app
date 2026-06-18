@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import { DayPicker } from '@daypicker/react'
 import { enGB } from 'date-fns/locale'
 import '@daypicker/react/style.css'
@@ -15,6 +15,7 @@ import MealFeed from './MealFeed'
 import AddFoodModal, { type NewFoodInput } from './AddFoodModal'
 import BulkImportModal from './BulkImportModal'
 import { addDays, dateToIso, isoToDate, isoWeekOf, todayIso, weekdayOf } from './lib/dates'
+import { resolveWeight, type WeightEntry } from './lib/weight'
 import { useFoodLog } from './useFoodLog'
 
 const statusClasses: Record<'met' | 'unmet', string> = {
@@ -36,6 +37,71 @@ function formatDateLabel(iso: string): string {
   return dateLabelFormat.format(new Date(Date.UTC(year, month - 1, day)))
 }
 
+/**
+ * The selected day's weight entry. Shows the carried-forward value when the day
+ * has no explicit weigh-in (resolved from earlier days), and saving overwrites
+ * that day's record. The caller keys this on the selected date, so stepping
+ * between days remounts it fresh with that day's resolved weight.
+ */
+function WeightCard({
+  weight,
+  onSave,
+}: {
+  weight: number | null
+  onSave: (lb: number) => void
+}) {
+  const [value, setValue] = useState(weight != null ? String(weight) : '')
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const lb = Number(value.trim())
+    if (value.trim() === '' || !Number.isFinite(lb) || lb <= 0) {
+      setError('Enter a weight greater than zero.')
+      return
+    }
+    onSave(lb)
+    setError(null)
+  }
+
+  return (
+    <section
+      aria-label="Weight"
+      className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
+    >
+      <h2 className="mb-1 text-lg font-semibold text-slate-900">Weight</h2>
+      <p className="mb-4 text-sm text-slate-500">
+        Your weight for this day, in pounds. A day with no weigh-in inherits the previous day's.
+      </p>
+      <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2" noValidate>
+        <input
+          type="number"
+          min="0"
+          step="any"
+          inputMode="decimal"
+          aria-label="Weight (lb)"
+          placeholder="—"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="w-28 rounded-md border border-slate-300 px-3 py-2 text-right text-slate-800 focus:border-slate-500 focus:outline-none"
+        />
+        <span className="text-sm text-slate-500">lb</span>
+        <button
+          type="submit"
+          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 focus:outline-none"
+        >
+          Save
+        </button>
+        {error && (
+          <p role="alert" className="w-full text-sm text-rose-600">
+            {error}
+          </p>
+        )}
+      </form>
+    </section>
+  )
+}
+
 type DashboardProps = {
   // When set, the add-food modal opens pre-filled with these macros (e.g. from
   // the Foods page). onPrefillConsumed lets the parent clear it once handled.
@@ -51,10 +117,12 @@ type DashboardProps = {
 type DashboardViewProps = DashboardProps & {
   loggedFoods: FoodEntry[]
   goalHistory: GoalChange[]
+  weights: WeightEntry[]
   addEntry: (entry: FoodEntry) => void
   addEntries: (entries: FoodEntry[]) => void
   updateEntry: (entry: FoodEntry) => void
   deleteEntry: (id: string) => void
+  setWeight: (date: string, lb: number) => void
 }
 
 /**
@@ -68,10 +136,12 @@ export function DashboardView({
   today = todayIso(),
   loggedFoods,
   goalHistory,
+  weights,
   addEntry,
   addEntries,
   updateEntry,
   deleteEntry,
+  setWeight,
 }: DashboardViewProps) {
   const [selectedDate, setSelectedDate] = useState(today)
   const [isFabOpen, setIsFabOpen] = useState(false)
@@ -117,6 +187,13 @@ export function DashboardView({
   const goals = useMemo(
     () => goalsForDate(goalHistory, selectedDate),
     [goalHistory, selectedDate],
+  )
+
+  // The weight in effect on the viewed day — an explicit weigh-in, or the
+  // carried-forward value from an earlier day.
+  const dayWeight = useMemo(
+    () => resolveWeight(weights, selectedDate),
+    [weights, selectedDate],
   )
 
   // Stamp new entries with the selected day so they show up in the day on screen.
@@ -271,6 +348,14 @@ export function DashboardView({
               </dl>
             </section>
 
+            {/* Weight for the selected day (carried forward when unset). Keyed
+                on the date so navigating days remounts with that day's value. */}
+            <WeightCard
+              key={selectedDate}
+              weight={dayWeight}
+              onSave={(lb) => setWeight(selectedDate, lb)}
+            />
+
             {/* Food log grouped by meal, filtered to the selected date */}
             <MealFeed loggedFoods={foodsForDate} onDelete={deleteFood} onEdit={setEditingEntry} />
           </main>
@@ -323,16 +408,27 @@ export function DashboardView({
  * dashboard on its own (and in its tests).
  */
 function Dashboard(props: DashboardProps = {}) {
-  const { entries, goalHistory, addEntry, addEntries, updateEntry, deleteEntry } = useFoodLog()
+  const {
+    entries,
+    goalHistory,
+    weights,
+    addEntry,
+    addEntries,
+    updateEntry,
+    deleteEntry,
+    setWeight,
+  } = useFoodLog()
   return (
     <DashboardView
       {...props}
       loggedFoods={entries}
       goalHistory={goalHistory}
+      weights={weights}
       addEntry={addEntry}
       addEntries={addEntries}
       updateEntry={updateEntry}
       deleteEntry={deleteEntry}
+      setWeight={setWeight}
     />
   )
 }

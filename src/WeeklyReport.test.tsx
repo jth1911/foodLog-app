@@ -34,9 +34,15 @@ vi.mock('recharts', () => {
     CartesianGrid: () => null,
     Tooltip: () => null,
     Legend: () => null,
-    ReferenceLine: () => null,
+    ReferenceLine: ({ y }: { y?: number }) => <div data-testid="reference-line" data-y={y} />,
   }
 })
+
+// The chart-data a named region's chart was handed.
+function chartDataIn(regionName: string): unknown[] {
+  const region = screen.getByRole('region', { name: regionName })
+  return JSON.parse(region.querySelector('[data-testid="chart-data"]')!.textContent!)
+}
 
 const TODAY = '2026-06-17' // a Wednesday
 
@@ -118,8 +124,7 @@ describe('WeeklyReport', () => {
   it('feeds the line chart the 7-day macro series ending today', () => {
     const entries = [entry({ date: TODAY, protein: 42, carbs: 10, fat: 5 })]
     render(<WeeklyReport loggedFoods={entries} goalHistory={goals} today={TODAY} />)
-    const lineChart = screen.getByTestId('line-chart')
-    const data = JSON.parse(lineChart.querySelector('[data-testid="chart-data"]')!.textContent!)
+    const data = chartDataIn('Macro consistency') as { date: string; protein: number }[]
     expect(data).toHaveLength(7)
     expect(data[6]).toMatchObject({ date: TODAY, protein: 42 })
   })
@@ -145,6 +150,39 @@ describe('WeeklyReport', () => {
   it('shows an empty state for the protein pie when no protein is logged', () => {
     render(<WeeklyReport loggedFoods={[]} goalHistory={goals} today={TODAY} />)
     expect(screen.getByText('No protein logged this week.')).toBeInTheDocument()
+  })
+
+  it('shows an empty state for the weight chart when none is logged', () => {
+    render(<WeeklyReport loggedFoods={[]} goalHistory={goals} today={TODAY} weights={[]} />)
+    expect(screen.getByText('No weight logged this week.')).toBeInTheDocument()
+  })
+
+  it('feeds the weight chart a carried-forward 7-day series', () => {
+    const weights = [
+      { date: '2026-06-11', lb: 180 },
+      { date: '2026-06-14', lb: 179 },
+    ]
+    render(<WeeklyReport loggedFoods={[]} goalHistory={goals} today={TODAY} weights={weights} />)
+    const data = chartDataIn('Weight trend') as { date: string; lb: number | null }[]
+    expect(data).toHaveLength(7)
+    expect(data.find((d) => d.date === '2026-06-12')!.lb).toBe(180) // carried forward
+    expect(data.find((d) => d.date === '2026-06-17')!.lb).toBe(179) // last value held
+  })
+
+  it('renders the target reference line on the weight chart when set', () => {
+    const weights = [{ date: '2026-06-11', lb: 180 }]
+    render(
+      <WeeklyReport
+        loggedFoods={[]}
+        goalHistory={goals}
+        today={TODAY}
+        weights={weights}
+        targetWeight={170}
+      />,
+    )
+    const region = screen.getByRole('region', { name: 'Weight trend' })
+    const ref = region.querySelector('[data-testid="reference-line"]')
+    expect(ref!.getAttribute('data-y')).toBe('170')
   })
 
   it('feeds the protein pie its visible food-group slices from the library', () => {
