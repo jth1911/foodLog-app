@@ -10,6 +10,7 @@
 
 import { GoogleGenAI, Type } from '@google/genai'
 import { MACRO_KEYS, type MacroKey } from './nutrition'
+import { log } from './logger'
 
 // A partial per-serving macro set: only the fields the model returned with a
 // usable (finite, non-negative) value.
@@ -64,50 +65,61 @@ export async function estimateMacros({
   food: string
   serving_size: string
 }): Promise<EstimatedMacros> {
-  if (!isGeminiConfigured()) {
-    throw new Error('No Gemini API key configured (set VITE_GEMINI_API_KEY).')
-  }
-
-  const ai = new GoogleGenAI({ apiKey: apiKey() })
-
-  const prompt =
-    `Estimate the nutrition for one serving of the food below. ` +
-    `Return per-serving values for the macros you are confident about; omit any you are unsure of. ` +
-    `Protein, carbs, fat and fiber are in grams; calories are in kcal.\n` +
-    `Food: ${food}\nServing size: ${serving_size}`
-
-  let response
+  log('info', 'Gemini auto-fill requested', { food, serving_size })
   try {
-    response = await ai.models.generateContent({
-      model: MODEL,
-      contents: prompt,
-      config: { responseMimeType: 'application/json', responseSchema },
+    if (!isGeminiConfigured()) {
+      throw new Error('No Gemini API key configured (set VITE_GEMINI_API_KEY).')
+    }
+
+    const ai = new GoogleGenAI({ apiKey: apiKey() })
+
+    const prompt =
+      `Estimate the nutrition for one serving of the food below. ` +
+      `Return per-serving values for the macros you are confident about; omit any you are unsure of. ` +
+      `Protein, carbs, fat and fiber are in grams; calories are in kcal.\n` +
+      `Food: ${food}\nServing size: ${serving_size}`
+
+    let response
+    try {
+      response = await ai.models.generateContent({
+        model: MODEL,
+        contents: prompt,
+        config: { responseMimeType: 'application/json', responseSchema },
+      })
+    } catch (cause) {
+      throw new Error('Could not reach Gemini. Check your connection or quota and try again.', {
+        cause,
+      })
+    }
+
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(response.text ?? '')
+    } catch {
+      throw new Error('Gemini returned an unexpected response. Please try again.')
+    }
+
+    const record = (parsed ?? {}) as Record<string, unknown>
+    const macros: EstimatedMacros = {}
+    for (const key of MACRO_KEYS) {
+      const value = usableNumber(record[key])
+      if (value !== undefined) macros[key] = value
+    }
+
+    if (Object.keys(macros).length === 0) {
+      throw new Error('Gemini could not estimate any macros for this food. Please fill them in.')
+    }
+
+    log('info', 'Gemini auto-fill succeeded', { food, serving_size, macros })
+    return macros
+  } catch (error) {
+    log('error', 'Gemini auto-fill failed', {
+      food,
+      serving_size,
+      error: error instanceof Error ? error.message : String(error),
     })
-  } catch (cause) {
-    throw new Error('Could not reach Gemini. Check your connection or quota and try again.', {
-      cause,
-    })
+    throw error
   }
-
-  let parsed: unknown
-  try {
-    parsed = JSON.parse(response.text ?? '')
-  } catch {
-    throw new Error('Gemini returned an unexpected response. Please try again.')
-  }
-
-  const record = (parsed ?? {}) as Record<string, unknown>
-  const macros: EstimatedMacros = {}
-  for (const key of MACRO_KEYS) {
-    const value = usableNumber(record[key])
-    if (value !== undefined) macros[key] = value
-  }
-
-  if (Object.keys(macros).length === 0) {
-    throw new Error('Gemini could not estimate any macros for this food. Please fill them in.')
-  }
-
-  return macros
 }
 
 // The macro fields as held in the food form (all strings; blank = empty).

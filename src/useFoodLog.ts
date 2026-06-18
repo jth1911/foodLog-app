@@ -9,6 +9,7 @@ import {
 import { localStorageStore, type FoodLogStore } from './lib/foodLogRepo'
 import { seedFoodsFromJson, type UserFoodReference } from './lib/foods'
 import { isoWeekOf, weekdayOf } from './lib/dates'
+import { log } from './lib/logger'
 
 // Fixed date the demo entries live on, decoupled from the real "today" the app
 // lands on. Anchoring the seed to a known day keeps it deterministic for
@@ -158,14 +159,17 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   }, [store, foods])
 
   const addEntry = useCallback((entry: FoodEntry) => {
+    log('info', 'Entry added', { description: entry.description, date: entry.date })
     setEntries((prev) => [...prev, entry])
   }, [])
 
   const updateEntry = useCallback((updated: FoodEntry) => {
+    log('info', 'Entry updated', { id: updated.id, description: updated.description })
     setEntries((prev) => prev.map((f) => (f.id === updated.id ? updated : f)))
   }, [])
 
   const deleteEntry = useCallback((id: string) => {
+    log('info', 'Entry deleted', { id })
     setEntries((prev) => prev.filter((f) => f.id !== id))
   }, [])
 
@@ -173,6 +177,7 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   // goals (an "edit" is a re-add), otherwise it's inserted. Kept sorted so
   // resolution and display order stay consistent.
   const addGoalChange = useCallback((effectiveDate: string, goals: Goals) => {
+    log('info', 'Goal change saved', { effectiveDate })
     setGoalHistory((prev) =>
       [...prev.filter((e) => e.effectiveDate !== effectiveDate), { effectiveDate, goals }].sort(
         byEffectiveDate,
@@ -182,17 +187,20 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
 
   // Never remove the last entry — every date must still resolve to a goal.
   const deleteGoalChange = useCallback((effectiveDate: string) => {
+    log('info', 'Goal change deleted', { effectiveDate })
     setGoalHistory((prev) =>
       prev.length <= 1 ? prev : prev.filter((e) => e.effectiveDate !== effectiveDate),
     )
   }, [])
 
   const addFood = useCallback((category: string, food: Omit<UserFoodReference, 'id'>) => {
+    log('info', 'Food added', { category, food: food.food })
     const withId: UserFoodReference = { ...food, id: crypto.randomUUID() }
     setFoods((prev) => ({ ...prev, [category]: [...(prev[category] ?? []), withId] }))
   }, [])
 
   const updateFood = useCallback((category: string, food: UserFoodReference) => {
+    log('info', 'Food updated', { category, food: food.food })
     setFoods((prev) => ({
       ...prev,
       [category]: (prev[category] ?? []).map((f) => (f.id === food.id ? food : f)),
@@ -200,6 +208,7 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   }, [])
 
   const deleteFood = useCallback((category: string, id: string) => {
+    log('info', 'Food deleted', { category, id })
     setFoods((prev) => ({
       ...prev,
       [category]: (prev[category] ?? []).filter((f) => f.id !== id),
@@ -209,10 +218,12 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   // Add an empty named bucket. A name that already exists is left untouched so
   // adding doesn't wipe an existing category's foods.
   const addCategory = useCallback((name: string) => {
+    log('info', 'Category added', { name })
     setFoods((prev) => (name in prev ? prev : { ...prev, [name]: [] }))
   }, [])
 
   const deleteCategory = useCallback((name: string) => {
+    log('info', 'Category deleted', { name })
     setFoods((prev) => {
       const next = { ...prev }
       delete next[name]

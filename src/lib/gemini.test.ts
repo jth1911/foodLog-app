@@ -22,6 +22,7 @@ import {
   isGeminiConfigured,
   mergeEmptyMacros,
 } from './gemini'
+import { readLog, clearLog } from './logger'
 
 // Helper: an SDK response carries the model output on `.text`.
 const reply = (text: string) => ({ text })
@@ -44,6 +45,7 @@ describe('estimateMacros', () => {
   beforeEach(() => {
     generateContent.mockReset()
     GoogleGenAI.mockClear()
+    clearLog()
     vi.stubEnv('VITE_GEMINI_API_KEY', 'test-key')
   })
   afterEach(() => vi.unstubAllEnvs())
@@ -97,6 +99,24 @@ describe('estimateMacros', () => {
   it('throws when the response yields no usable macros', async () => {
     generateContent.mockResolvedValue(reply('{"protein":-1}'))
     await expect(estimateMacros({ food: 'Egg', serving_size: '1 large' })).rejects.toThrow()
+  })
+
+  it('logs a success entry when the estimate completes', async () => {
+    generateContent.mockResolvedValue(reply('{"protein":6,"carbs":1,"calories":70}'))
+    await estimateMacros({ food: 'Egg', serving_size: '1 large' })
+
+    const success = readLog().find((e) => e.level === 'info' && /succeeded/i.test(e.message))
+    expect(success).toBeTruthy()
+    expect(success!.context).toMatchObject({ food: 'Egg', serving_size: '1 large' })
+  })
+
+  it('logs an error entry with the failure message when the estimate fails', async () => {
+    generateContent.mockRejectedValue(new Error('quota exceeded'))
+    await expect(estimateMacros({ food: 'Egg', serving_size: '1 large' })).rejects.toThrow()
+
+    const failure = readLog().find((e) => e.level === 'error')
+    expect(failure).toBeTruthy()
+    expect(failure!.context?.error).toMatch(/could not reach gemini/i)
   })
 })
 
