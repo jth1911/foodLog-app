@@ -1,34 +1,58 @@
-import { describe, it, expect, vi } from 'vitest'
+import { useState } from 'react'
+import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import FoodsPage from './FoodsPage'
-import { foodCategories } from './lib/foods'
+import { type UserFoodReference } from './lib/foods'
+
+const foods: Record<string, UserFoodReference[]> = {
+  'Dairy/Eggs': [
+    { id: 'e1', food: 'Egg', serving_size: '1 large', protein: 6, carbs: 1, calories: 70 },
+    { id: 'e2', food: 'String cheese', serving_size: '1 stick', protein: 6, carbs: 1, calories: 60 },
+  ],
+  Empty: [],
+}
+
+const noop = () => {}
+
+function renderPage(overrides: Partial<Parameters<typeof FoodsPage>[0]> = {}) {
+  const props = {
+    foods,
+    onSelectFood: noop,
+    addFood: noop,
+    updateFood: noop,
+    deleteFood: noop,
+    addCategory: noop,
+    deleteCategory: noop,
+    ...overrides,
+  }
+  render(<FoodsPage {...props} />)
+  return props
+}
 
 describe('FoodsPage', () => {
+  afterEach(() => vi.restoreAllMocks())
+
   it('renders a heading for every category', () => {
-    render(<FoodsPage onSelectFood={() => {}} />)
-    for (const category of Object.keys(foodCategories)) {
-      expect(screen.getByRole('heading', { name: category })).toBeInTheDocument()
-    }
+    renderPage()
+    expect(screen.getByRole('heading', { name: 'Dairy/Eggs' })).toBeInTheDocument()
+    expect(screen.getByRole('heading', { name: 'Empty' })).toBeInTheDocument()
   })
 
-  it('shows each food with its name and serving size', () => {
-    render(<FoodsPage onSelectFood={() => {}} />)
-    const egg = foodCategories['Dairy/Eggs'].find((f) => f.food === 'Egg')!
-    const row = screen.getByRole('button', { name: egg.food })
-    expect(within(row).getByText(egg.food)).toBeInTheDocument()
-    expect(within(row).getByText(egg.serving_size)).toBeInTheDocument()
+  it('shows each food with its name, serving size and macros', () => {
+    renderPage()
+    const row = screen.getByRole('button', { name: 'Egg' })
+    expect(within(row).getByText('Egg')).toBeInTheDocument()
+    expect(within(row).getByText('1 large')).toBeInTheDocument()
+    expect(within(row).getByText('6g')).toBeInTheDocument()
   })
 
-  it('maps a clicked food to a Partial<NewFoodInput>', async () => {
+  it('maps a clicked food to a Partial<NewFoodInput> with numeric macros', async () => {
     const onSelectFood = vi.fn()
     const user = userEvent.setup()
-    render(<FoodsPage onSelectFood={onSelectFood} />)
+    renderPage({ onSelectFood })
 
-    // "Egg" → protein_g 6, carbs_g 1, calories_kcal 70; fat/fiber left for the user.
     await user.click(screen.getByRole('button', { name: 'Egg' }))
-
-    expect(onSelectFood).toHaveBeenCalledTimes(1)
     expect(onSelectFood).toHaveBeenCalledWith({
       description: 'Egg',
       servingSize: '1 large',
@@ -38,15 +62,194 @@ describe('FoodsPage', () => {
     })
   })
 
-  it('applies the "<1" sentinel rule when mapping (String cheese carbs → 1)', async () => {
+  it('passes optional fat/fiber through when the food carries them', async () => {
     const onSelectFood = vi.fn()
     const user = userEvent.setup()
-    render(<FoodsPage onSelectFood={onSelectFood} />)
+    renderPage({
+      foods: {
+        Custom: [
+          { id: 'b1', food: 'Bar', serving_size: '1 bar', protein: 20, carbs: 25, calories: 210, fat: 7, fiber: 3 },
+        ],
+      },
+      onSelectFood,
+    })
 
-    await user.click(screen.getByRole('button', { name: 'String cheese (low fat)' }))
+    await user.click(screen.getByRole('button', { name: 'Bar' }))
+    expect(onSelectFood).toHaveBeenCalledWith(expect.objectContaining({ fat: 7, fiber: 3 }))
+  })
 
-    expect(onSelectFood).toHaveBeenCalledWith(
-      expect.objectContaining({ description: 'String cheese (low fat)', carbs: 1 }),
-    )
+  it('adds a new category via the form', async () => {
+    const addCategory = vi.fn()
+    const user = userEvent.setup()
+    renderPage({ addCategory })
+
+    await user.type(screen.getByLabelText('New category name'), 'Snacks')
+    await user.click(screen.getByRole('button', { name: 'Add category' }))
+    expect(addCategory).toHaveBeenCalledWith('Snacks')
+  })
+
+  it('rejects a duplicate category name', async () => {
+    const addCategory = vi.fn()
+    const user = userEvent.setup()
+    renderPage({ addCategory })
+
+    await user.type(screen.getByLabelText('New category name'), 'Dairy/Eggs')
+    await user.click(screen.getByRole('button', { name: 'Add category' }))
+    expect(addCategory).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent(/already exists/i)
+  })
+
+  it('adds a food to the selected category', async () => {
+    const addFood = vi.fn()
+    const user = userEvent.setup()
+    renderPage({ addFood })
+
+    await user.selectOptions(screen.getByLabelText('Food category'), 'Empty')
+    await user.type(screen.getByLabelText('New food name'), 'Tofu')
+    await user.type(screen.getByLabelText('New food serving size'), '1/2 cup')
+    await user.type(screen.getByLabelText('New food protein'), '10')
+    await user.type(screen.getByLabelText('New food carbs'), '2')
+    await user.type(screen.getByLabelText('New food calories'), '80')
+    await user.click(screen.getByRole('button', { name: 'Add food' }))
+
+    expect(addFood).toHaveBeenCalledWith('Empty', {
+      food: 'Tofu',
+      serving_size: '1/2 cup',
+      protein: 10,
+      carbs: 2,
+      calories: 80,
+    })
+  })
+
+  it('includes optional fat/fiber on add only when entered', async () => {
+    const addFood = vi.fn()
+    const user = userEvent.setup()
+    renderPage({ addFood })
+
+    await user.type(screen.getByLabelText('New food name'), 'Peanut butter')
+    await user.type(screen.getByLabelText('New food serving size'), '1 tbsp')
+    await user.type(screen.getByLabelText('New food protein'), '4')
+    await user.type(screen.getByLabelText('New food carbs'), '3')
+    await user.type(screen.getByLabelText('New food calories'), '94')
+    await user.type(screen.getByLabelText('New food fat'), '8')
+    await user.click(screen.getByRole('button', { name: 'Add food' }))
+
+    expect(addFood).toHaveBeenCalledWith('Dairy/Eggs', expect.objectContaining({ fat: 8 }))
+    expect(addFood.mock.calls[0][1]).not.toHaveProperty('fiber')
+  })
+
+  it('rejects a food with a missing required macro', async () => {
+    const addFood = vi.fn()
+    const user = userEvent.setup()
+    renderPage({ addFood })
+
+    await user.type(screen.getByLabelText('New food name'), 'Mystery')
+    await user.type(screen.getByLabelText('New food serving size'), '1')
+    // protein left blank
+    await user.click(screen.getByRole('button', { name: 'Add food' }))
+    expect(addFood).not.toHaveBeenCalled()
+    expect(screen.getByRole('alert')).toHaveTextContent(/protein/i)
+  })
+
+  it('edits a food in place, keeping its id and category', async () => {
+    const updateFood = vi.fn()
+    const user = userEvent.setup()
+    renderPage({ updateFood })
+
+    await user.click(screen.getByRole('button', { name: 'Edit Egg' }))
+    // The form pre-fills and locks the category.
+    expect(screen.getByLabelText('New food name')).toHaveValue('Egg')
+    expect(screen.getByLabelText('Food category')).toHaveTextContent('Dairy/Eggs')
+
+    await user.clear(screen.getByLabelText('New food protein'))
+    await user.type(screen.getByLabelText('New food protein'), '7')
+    await user.click(screen.getByRole('button', { name: 'Save changes' }))
+
+    expect(updateFood).toHaveBeenCalledWith('Dairy/Eggs', {
+      id: 'e1',
+      food: 'Egg',
+      serving_size: '1 large',
+      protein: 7,
+      carbs: 1,
+      calories: 70,
+    })
+  })
+
+  it('deletes a single food by id', async () => {
+    const deleteFood = vi.fn()
+    const user = userEvent.setup()
+    renderPage({ deleteFood })
+
+    await user.click(screen.getByRole('button', { name: 'Delete Egg' }))
+    expect(deleteFood).toHaveBeenCalledWith('Dairy/Eggs', 'e1')
+  })
+
+  it('deletes an empty category without confirmation', async () => {
+    const deleteCategory = vi.fn()
+    const confirm = vi.spyOn(window, 'confirm')
+    const user = userEvent.setup()
+    renderPage({ deleteCategory })
+
+    await user.click(screen.getByRole('button', { name: 'Delete category Empty' }))
+    expect(confirm).not.toHaveBeenCalled()
+    expect(deleteCategory).toHaveBeenCalledWith('Empty')
+  })
+
+  it('does not re-add a category that was the chosen add-target after deleting it', async () => {
+    const addFood = vi.fn()
+    const user = userEvent.setup()
+    // A stateful host so deleting a category actually updates the foods prop,
+    // mirroring the real store wiring (a static prop wouldn't exercise the fix).
+    function Host() {
+      const [data, setData] = useState<Record<string, UserFoodReference[]>>({ Empty: [], Other: [] })
+      return (
+        <FoodsPage
+          foods={data}
+          onSelectFood={noop}
+          addFood={addFood}
+          updateFood={noop}
+          deleteFood={noop}
+          addCategory={noop}
+          deleteCategory={(name) =>
+            setData((prev) => {
+              const next = { ...prev }
+              delete next[name]
+              return next
+            })
+          }
+        />
+      )
+    }
+    render(<Host />)
+
+    // Point the add-target at "Empty", then delete "Empty".
+    await user.selectOptions(screen.getByLabelText('Food category'), 'Empty')
+    await user.click(screen.getByRole('button', { name: 'Delete category Empty' }))
+
+    // Adding a food now falls back to a still-existing category, not the gone one.
+    await user.type(screen.getByLabelText('New food name'), 'Tofu')
+    await user.type(screen.getByLabelText('New food serving size'), '1/2 cup')
+    await user.type(screen.getByLabelText('New food protein'), '10')
+    await user.type(screen.getByLabelText('New food carbs'), '2')
+    await user.type(screen.getByLabelText('New food calories'), '80')
+    await user.click(screen.getByRole('button', { name: 'Add food' }))
+
+    expect(addFood).toHaveBeenCalledTimes(1)
+    expect(addFood.mock.calls[0][0]).toBe('Other')
+  })
+
+  it('confirms before deleting a non-empty category', async () => {
+    const deleteCategory = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
+    const user = userEvent.setup()
+    renderPage({ deleteCategory })
+
+    await user.click(screen.getByRole('button', { name: 'Delete category Dairy/Eggs' }))
+    expect(window.confirm).toHaveBeenCalledOnce()
+    expect(deleteCategory).not.toHaveBeenCalled()
+
+    vi.mocked(window.confirm).mockReturnValue(true)
+    await user.click(screen.getByRole('button', { name: 'Delete category Dairy/Eggs' }))
+    expect(deleteCategory).toHaveBeenCalledWith('Dairy/Eggs')
   })
 })

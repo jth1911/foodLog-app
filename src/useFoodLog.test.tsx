@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { useFoodLog, SEED_FOODS } from './useFoodLog'
 import type { FoodLogStore } from './lib/foodLogRepo'
+import { seedFoodsFromJson, type UserFoodReference } from './lib/foods'
 import { DEFAULT_GOALS, GOALS_EPOCH, type FoodEntry, type GoalChange, type Goals } from './lib/nutrition'
 
 const makeEntry = (id: string): FoodEntry => ({
@@ -26,6 +27,7 @@ function makeFakeStore(
   entries: FoodEntry[] | null = null,
   history: GoalChange[] | null = null,
   legacy: Goals | null = null,
+  foods: Record<string, UserFoodReference[]> | null = null,
 ): FoodLogStore {
   return {
     loadEntries: () => entries,
@@ -35,6 +37,10 @@ function makeFakeStore(
     loadGoalHistory: () => history,
     saveGoalHistory: (next) => {
       history = next
+    },
+    loadFoods: () => foods,
+    saveFoods: (next) => {
+      foods = next
     },
     loadLegacyGoals: () => legacy,
   }
@@ -161,6 +167,72 @@ describe('useFoodLog — goal history mutations', () => {
     const { result } = renderHook(() => useFoodLog(makeFakeStore([], seeded())))
     act(() => result.current.deleteGoalChange(GOALS_EPOCH))
     expect(result.current.goalHistory).toEqual(seeded())
+  })
+})
+
+describe('useFoodLog — reference foods', () => {
+  const storedFoods: Record<string, UserFoodReference[]> = {
+    Custom: [{ id: 'f1', food: 'Protein bar', serving_size: '1 bar', protein: 20, carbs: 25, calories: 210 }],
+  }
+
+  it('seeds the foods from the JSON when storage is empty', () => {
+    const { result } = renderHook(() => useFoodLog(makeFakeStore()))
+    expect(result.current.foods).toEqual(seedFoodsFromJson())
+  })
+
+  it('loads stored foods over the seed', () => {
+    const { result } = renderHook(() => useFoodLog(makeFakeStore(null, null, null, storedFoods)))
+    expect(result.current.foods).toEqual(storedFoods)
+  })
+
+  it('adds a food with a generated id to a category', () => {
+    const { result } = renderHook(() => useFoodLog(makeFakeStore(null, null, null, { Custom: [] })))
+    act(() =>
+      result.current.addFood('Custom', {
+        food: 'Tofu',
+        serving_size: '1/2 cup',
+        protein: 10,
+        carbs: 2,
+        calories: 80,
+      }),
+    )
+    expect(result.current.foods.Custom).toHaveLength(1)
+    expect(result.current.foods.Custom[0]).toMatchObject({ food: 'Tofu', protein: 10 })
+    expect(typeof result.current.foods.Custom[0].id).toBe('string')
+  })
+
+  it('updates a food in place by id', () => {
+    const { result } = renderHook(() => useFoodLog(makeFakeStore(null, null, null, storedFoods)))
+    act(() => result.current.updateFood('Custom', { ...storedFoods.Custom[0], protein: 25 }))
+    expect(result.current.foods.Custom[0].protein).toBe(25)
+    expect(result.current.foods.Custom).toHaveLength(1)
+  })
+
+  it('deletes a food by id', () => {
+    const { result } = renderHook(() => useFoodLog(makeFakeStore(null, null, null, storedFoods)))
+    act(() => result.current.deleteFood('Custom', 'f1'))
+    expect(result.current.foods.Custom).toEqual([])
+  })
+
+  it('adds an empty category without clobbering an existing one', () => {
+    const { result } = renderHook(() => useFoodLog(makeFakeStore(null, null, null, storedFoods)))
+    act(() => result.current.addCategory('Snacks'))
+    expect(result.current.foods.Snacks).toEqual([])
+    act(() => result.current.addCategory('Custom')) // already exists → untouched
+    expect(result.current.foods.Custom).toEqual(storedFoods.Custom)
+  })
+
+  it('deletes a whole category', () => {
+    const { result } = renderHook(() => useFoodLog(makeFakeStore(null, null, null, storedFoods)))
+    act(() => result.current.deleteCategory('Custom'))
+    expect(result.current.foods).not.toHaveProperty('Custom')
+  })
+
+  it('saves foods to the store on change', () => {
+    const store = makeFakeStore(null, null, null, { Custom: [] })
+    const { result } = renderHook(() => useFoodLog(store))
+    act(() => result.current.addCategory('Extra'))
+    expect(store.loadFoods()).toHaveProperty('Extra')
   })
 })
 

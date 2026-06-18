@@ -73,7 +73,15 @@ function App() {
         />
       </div>
       <div hidden={activeTab !== 'foods'}>
-        <FoodsPage onSelectFood={handleSelectFood} />
+        <FoodsPage
+          foods={foodLog.foods}
+          onSelectFood={handleSelectFood}
+          addFood={foodLog.addFood}
+          updateFood={foodLog.updateFood}
+          deleteFood={foodLog.deleteFood}
+          addCategory={foodLog.addCategory}
+          deleteCategory={foodLog.deleteCategory}
+        />
       </div>
       <div hidden={activeTab !== 'goals'}>
         <GoalsPage

@@ -60,3 +60,40 @@ export function scaleMacros(
 // The JSON keyed by category, e.g. foodCategories['Dairy/Eggs'].
 export const foodCategories: Record<string, FoodReference[]> =
   proteinSources as Record<string, FoodReference[]>
+
+// A user-managed reference food. Unlike FoodReference (which mirrors the raw
+// JSON's mixed macro strings), macros here are already-normalised plain numbers.
+// protein/carbs/calories are the tracked-and-required set; fat/fiber are optional
+// because the seed data never carried them.
+export type UserFoodReference = {
+  id: string
+  food: string
+  serving_size: string
+  protein: number
+  carbs: number
+  calories: number
+  fat?: number
+  fiber?: number
+}
+
+/**
+ * Build the first-run reference library from the static JSON: each food's mixed
+ * macro strings are normalised to numbers and stamped with a stable id. Runs once
+ * to seed localStorage (see useFoodLog); thereafter the stored copy is the source
+ * of truth and the JSON is only this seed.
+ */
+export function seedFoodsFromJson(): Record<string, UserFoodReference[]> {
+  const seeded: Record<string, UserFoodReference[]> = {}
+  let n = 0
+  for (const [category, foods] of Object.entries(foodCategories)) {
+    seeded[category] = foods.map((food) => ({
+      id: `seed-${n++}`,
+      food: food.food,
+      serving_size: food.serving_size,
+      protein: normaliseMacro(food.protein_g),
+      carbs: normaliseMacro(food.carbs_g),
+      calories: normaliseMacro(food.calories_kcal),
+    }))
+  }
+  return seeded
+}
