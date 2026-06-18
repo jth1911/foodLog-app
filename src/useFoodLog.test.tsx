@@ -117,6 +117,17 @@ describe('useFoodLog — entry mutations', () => {
     act(() => result.current.deleteEntry('e-1'))
     expect(result.current.entries).not.toContainEqual(entry)
   })
+
+  it('updates an existing entry in place by id', () => {
+    const { result } = renderHook(() => useFoodLog(makeFakeStore([])))
+    const entry = makeEntry('e-1')
+
+    act(() => result.current.addEntry(entry))
+    const updated = { ...entry, description: 'Edited', protein: 50 }
+    act(() => result.current.updateEntry(updated))
+
+    expect(result.current.entries).toEqual([updated])
+  })
 })
 
 describe('useFoodLog — goal history mutations', () => {
@@ -245,6 +256,16 @@ describe('useFoodLog — persistence', () => {
 
     act(() => result.current.deleteEntry('e-2'))
     expect(store.loadEntries()).toEqual([])
+  })
+
+  it('saves an updated entry to the store', () => {
+    const store = makeFakeStore([])
+    const { result } = renderHook(() => useFoodLog(store))
+    const entry = makeEntry('e-3')
+
+    act(() => result.current.addEntry(entry))
+    act(() => result.current.updateEntry({ ...entry, calories: 999 }))
+    expect(store.loadEntries()).toEqual([{ ...entry, calories: 999 }])
   })
 
   it('saves the goal history to the store on change', () => {

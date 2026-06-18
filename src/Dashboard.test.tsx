@@ -2,7 +2,7 @@ import { describe, it, expect, vi, afterEach, beforeEach } from 'vitest'
 import { render, screen, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Dashboard, { DashboardView } from './Dashboard'
-import { DEFAULT_GOALS, GOALS_EPOCH, type GoalChange } from './lib/nutrition'
+import { DEFAULT_GOALS, GOALS_EPOCH, type FoodEntry, type GoalChange } from './lib/nutrition'
 
 // The five seeded example entries live on this fixed day; pinning `today` to it
 // lands the dashboard on the seeded content so these assertions stay deterministic.
@@ -198,6 +198,63 @@ describe('Dashboard', () => {
     })
   })
 
+  describe('editing entries', () => {
+    it('edits an entry in place via the modal and updates totals', async () => {
+      const user = userEvent.setup()
+      renderSeeded()
+
+      await user.click(screen.getByRole('button', { name: 'Edit Black coffee' }))
+      const dialog = screen.getByRole('dialog', { name: 'Edit food' })
+      expect(within(dialog).getByLabelText('Food name')).toHaveValue('Black coffee')
+
+      fireEvent.change(within(dialog).getByLabelText('Calories'), { target: { value: '15' } })
+      await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+      // The modal closes and totals reflect the edit: 1435 - 5 + 15 = 1445.
+      expect(screen.queryByRole('dialog', { name: 'Edit food' })).not.toBeInTheDocument()
+      expect(screen.getByLabelText('Calories consumed')).toHaveTextContent('1445')
+    })
+
+    it('drops the serving/quantity label when a scaled entry is edited', async () => {
+      const user = userEvent.setup()
+      const updateEntry = vi.fn()
+      const scaled: FoodEntry = {
+        id: 's1',
+        date: '2026-05-01',
+        week: 18,
+        weekday: 'Friday',
+        mealType: 'Breakfast',
+        description: 'Egg',
+        fat: 0,
+        carbs: 1,
+        protein: 6,
+        fiber: 0,
+        calories: 70,
+        servingSize: '1 large',
+        quantity: 1,
+      }
+      render(
+        <DashboardView
+          today="2026-05-01"
+          loggedFoods={[scaled]}
+          goalHistory={[{ effectiveDate: GOALS_EPOCH, goals: DEFAULT_GOALS }]}
+          addEntry={() => {}}
+          deleteEntry={() => {}}
+          updateEntry={updateEntry}
+        />,
+      )
+
+      await user.click(screen.getByRole('button', { name: 'Edit Egg' }))
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(updateEntry).toHaveBeenCalledTimes(1)
+      const updated = updateEntry.mock.calls[0][0] as FoodEntry
+      expect(updated.id).toBe('s1')
+      expect(updated.servingSize).toBeUndefined()
+      expect(updated.quantity).toBeUndefined()
+    })
+  })
+
   // DashboardView is the presentational form App renders with a shared store.
   // Driving it directly lets us pin a dated goal history.
   describe('read-only goal resolution', () => {
@@ -213,6 +270,7 @@ describe('Dashboard', () => {
           goalHistory={history}
           addEntry={() => {}}
           deleteEntry={() => {}}
+          updateEntry={() => {}}
         />,
       )
 

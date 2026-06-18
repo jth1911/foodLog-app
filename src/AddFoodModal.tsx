@@ -23,6 +23,10 @@ type AddFoodModalProps = {
   // Optional seed so the modal can open pre-filled (e.g. from the Foods page).
   // Omitted fields stay blank, matching a fresh open from the FAB.
   initialValues?: Partial<NewFoodInput>
+  // Edit an existing entry rather than add a new one: the macro fields are the
+  // final totals (no quantity scaling, even if a servingSize is present), and
+  // the title/submit label read "Edit food"/"Save".
+  editing?: boolean
 }
 
 // Start every numeric field blank so the form doesn't pre-fill zeros.
@@ -51,7 +55,7 @@ function macrosFrom(initial: Partial<NewFoodInput> | undefined) {
  * user-entered fields, validates them, and reports a NewFoodInput up via onAdd.
  * Owns no app state — the dashboard remains the single source of truth.
  */
-function AddFoodModal({ onAdd, onClose, initialValues }: AddFoodModalProps) {
+function AddFoodModal({ onAdd, onClose, initialValues, editing = false }: AddFoodModalProps) {
   const [description, setDescription] = useState(initialValues?.description ?? '')
   const [mealType, setMealType] = useState<MealType>(initialValues?.mealType ?? MEAL_TYPES[0])
   const [macros, setMacros] = useState(() => macrosFrom(initialValues))
@@ -61,7 +65,9 @@ function AddFoodModal({ onAdd, onClose, initialValues }: AddFoodModalProps) {
   // Opened from the Foods page (a reference serving exists): the macro fields
   // represent one serving and a quantity multiplies them. A blank FAB open has
   // no servingSize, so the quantity UI stays hidden and macros are final.
-  const servingSize = initialValues?.servingSize
+  // Editing an existing entry always treats macros as final totals, even if the
+  // entry carried a servingSize — the user edits the totals directly.
+  const servingSize = editing ? undefined : initialValues?.servingSize
   const isPrefilled = servingSize != null
 
   // Esc closes the modal, matching native dialog behaviour.
@@ -140,13 +146,13 @@ function AddFoodModal({ onAdd, onClose, initialValues }: AddFoodModalProps) {
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Add food"
+        aria-label={editing ? 'Edit food' : 'Add food'}
         // Stop backdrop clicks from closing when interacting inside the card.
         onClick={(e) => e.stopPropagation()}
         className="w-full max-w-md rounded-2xl bg-white p-6 shadow-xl"
       >
         <div className="mb-4 flex items-center justify-between">
-          <h2 className="text-lg font-semibold text-slate-900">Add food</h2>
+          <h2 className="text-lg font-semibold text-slate-900">{editing ? 'Edit food' : 'Add food'}</h2>
           <button
             type="button"
             aria-label="Close"
@@ -266,7 +272,7 @@ function AddFoodModal({ onAdd, onClose, initialValues }: AddFoodModalProps) {
               type="submit"
               className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 focus:outline-none"
             >
-              Add
+              {editing ? 'Save' : 'Add'}
             </button>
           </div>
         </form>

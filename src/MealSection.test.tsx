@@ -19,22 +19,22 @@ const entry: FoodEntry = {
 
 describe('MealSection', () => {
   it('renders the meal name as a heading', () => {
-    render(<MealSection meal="Breakfast" entries={[]} onDelete={() => {}} />)
+    render(<MealSection meal="Breakfast" entries={[]} onDelete={() => {}} onEdit={() => {}} />)
     expect(screen.getByRole('heading', { name: 'Breakfast' })).toBeInTheDocument()
   })
 
   it('shows a friendly empty state when there are no entries', () => {
-    render(<MealSection meal="Breakfast" entries={[]} onDelete={() => {}} />)
+    render(<MealSection meal="Breakfast" entries={[]} onDelete={() => {}} onEdit={() => {}} />)
     expect(screen.getByText('No food logged for breakfast yet.')).toBeInTheDocument()
   })
 
   it('lowercases the meal name in the empty state', () => {
-    render(<MealSection meal="Snacks" entries={[]} onDelete={() => {}} />)
+    render(<MealSection meal="Snacks" entries={[]} onDelete={() => {}} onEdit={() => {}} />)
     expect(screen.getByText('No food logged for snacks yet.')).toBeInTheDocument()
   })
 
   it('renders a row per entry with description, calories and macros', () => {
-    render(<MealSection meal="Breakfast" entries={[entry]} onDelete={() => {}} />)
+    render(<MealSection meal="Breakfast" entries={[entry]} onDelete={() => {}} onEdit={() => {}} />)
     expect(screen.getByText('Greek yogurt')).toBeInTheDocument()
     expect(screen.getByText('320 kcal')).toBeInTheDocument()
     expect(screen.getByText('P 22')).toBeInTheDocument()
@@ -53,13 +53,13 @@ describe('MealSection', () => {
       servingSize: '1 large',
       quantity: 2,
     }
-    render(<MealSection meal="Breakfast" entries={[scaled]} onDelete={() => {}} />)
+    render(<MealSection meal="Breakfast" entries={[scaled]} onDelete={() => {}} onEdit={() => {}} />)
     expect(screen.getByText('Egg')).toBeInTheDocument()
     expect(screen.getByText('2 × 1 large')).toBeInTheDocument()
   })
 
   it('shows no serving suffix for a plain entry', () => {
-    render(<MealSection meal="Breakfast" entries={[entry]} onDelete={() => {}} />)
+    render(<MealSection meal="Breakfast" entries={[entry]} onDelete={() => {}} onEdit={() => {}} />)
     expect(screen.queryByText(/×/)).not.toBeInTheDocument()
   })
 
@@ -69,7 +69,7 @@ describe('MealSection', () => {
     it('deletes the entry by id once the confirmation is accepted', () => {
       const onDelete = vi.fn()
       vi.spyOn(window, 'confirm').mockReturnValue(true)
-      render(<MealSection meal="Breakfast" entries={[entry]} onDelete={onDelete} />)
+      render(<MealSection meal="Breakfast" entries={[entry]} onDelete={onDelete} onEdit={() => {}} />)
 
       fireEvent.click(screen.getByRole('button', { name: 'Delete Greek yogurt' }))
       expect(window.confirm).toHaveBeenCalledOnce()
@@ -79,10 +79,20 @@ describe('MealSection', () => {
     it('does not delete when the confirmation is dismissed', () => {
       const onDelete = vi.fn()
       vi.spyOn(window, 'confirm').mockReturnValue(false)
-      render(<MealSection meal="Breakfast" entries={[entry]} onDelete={onDelete} />)
+      render(<MealSection meal="Breakfast" entries={[entry]} onDelete={onDelete} onEdit={() => {}} />)
 
       fireEvent.click(screen.getByRole('button', { name: 'Delete Greek yogurt' }))
       expect(onDelete).not.toHaveBeenCalled()
+    })
+  })
+
+  describe('edit control', () => {
+    it('calls onEdit with the entry, no confirmation needed', () => {
+      const onEdit = vi.fn()
+      render(<MealSection meal="Breakfast" entries={[entry]} onDelete={() => {}} onEdit={onEdit} />)
+
+      fireEvent.click(screen.getByRole('button', { name: 'Edit Greek yogurt' }))
+      expect(onEdit).toHaveBeenCalledWith(entry)
     })
   })
 })
