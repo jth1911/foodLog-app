@@ -185,14 +185,14 @@ describe('mealCalorieBreakdown', () => {
     const breakdown = mealCalorieBreakdown(entries, dates)
     const byMeal = Object.fromEntries(breakdown.map((b) => [b.mealType, b]))
     expect(byMeal.Lunch.calories).toBe(600)
-    expect(byMeal.Lunch.percent).toBe(60) // 600 / 1000
-    expect(byMeal.Breakfast.percent).toBe(30)
+    expect(byMeal.Lunch.share).toBe(60) // 600 / 1000
+    expect(byMeal.Breakfast.share).toBe(30)
     expect(byMeal.Snacks.calories).toBe(0)
   })
 
   it('returns all meals at 0% when there are no calories', () => {
     const breakdown = mealCalorieBreakdown([], dates)
     expect(breakdown).toHaveLength(4)
-    expect(breakdown.every((b) => b.calories === 0 && b.percent === 0)).toBe(true)
+    expect(breakdown.every((b) => b.calories === 0 && b.share === 0)).toBe(true)
   })
 })

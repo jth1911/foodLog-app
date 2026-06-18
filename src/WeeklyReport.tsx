@@ -82,8 +82,8 @@ type WeeklyReportProps = {
 const cardClass = 'rounded-xl border border-slate-200 bg-white p-5 shadow-sm'
 
 // Slice labels like "Lunch 60%". Uses Recharts' own label props — `name` (our
-// nameKey, the meal) and `percent` (the slice's 0–1 fraction) — rather than the
-// datum's own `percent` field, which Recharts' computed `percent` would shadow.
+// nameKey, the meal) and `percent` (the slice's 0–1 fraction). The datum's own
+// share field is named `share`, not `percent`, so it can't shadow this value.
 function renderSliceLabel(props: { name?: string; percent?: number }): string {
   return `${props.name} ${Math.round((props.percent ?? 0) * 100)}%`
 }

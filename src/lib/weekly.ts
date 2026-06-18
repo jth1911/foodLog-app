@@ -114,8 +114,10 @@ export type MealSlice = {
   mealType: MealType
   calories: number
   // Share of the window's total calories, rounded to a whole percent (0 when
-  // there are no calories at all).
-  percent: number
+  // there are no calories at all). Named `share` rather than `percent` so it
+  // can't shadow Recharts' own computed `percent` when the datum is spread onto
+  // a Pie label's render props.
+  share: number
 }
 
 /**
@@ -139,6 +141,6 @@ export function mealCalorieBreakdown(entries: FoodEntry[], dates: string[]): Mea
   return MEAL_TYPES.map((mealType) => ({
     mealType,
     calories: caloriesByMeal[mealType],
-    percent: total === 0 ? 0 : Math.round((caloriesByMeal[mealType] / total) * 100),
+    share: total === 0 ? 0 : Math.round((caloriesByMeal[mealType] / total) * 100),
   }))
 }
