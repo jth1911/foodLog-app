@@ -90,11 +90,16 @@ describe('MonthlyReport', () => {
   })
 
   it('colours a logged day by its goal band, neutral when unlogged', () => {
-    const entries = [entry({ date: '2026-06-05', calories: 3000 })] // over the 2000 goal
+    // goal 2000, ±10% band → floor 1800, ceiling 2200.
+    const entries = [
+      entry({ date: '2026-06-03', calories: 1500 }), // comfortably under → green
+      entry({ date: '2026-06-04', calories: 2000 }), // nearing the goal → amber
+      entry({ date: '2026-06-05', calories: 3000 }), // over → red
+    ]
     render(<MonthlyReport loggedFoods={entries} goalHistory={goals(2000)} today={TODAY} />)
-    const over = screen.getByTitle('2026-06-05: 3000 kcal — Surplus')
-    expect(over.className).toContain('bg-rose-500')
-    const empty = screen.getByTitle('2026-06-06: no log')
-    expect(empty.className).toContain('bg-slate-100')
+    expect(screen.getByTitle('2026-06-03: 1500 kcal — Under').className).toContain('bg-emerald-500')
+    expect(screen.getByTitle('2026-06-04: 2000 kcal — Near goal').className).toContain('bg-amber-400')
+    expect(screen.getByTitle('2026-06-05: 3000 kcal — Surplus').className).toContain('bg-rose-500')
+    expect(screen.getByTitle('2026-06-06: no log').className).toContain('bg-slate-100')
   })
 })

@@ -9,18 +9,20 @@ import {
 } from './lib/monthly'
 import { addMonths, monthDays, startOfMonth, todayIso } from './lib/dates'
 
-// Heatmap cell colour per calorie status. Green within the goal band, amber for
-// under-eating, rose for a surplus, and a faint slate for days with no log.
+// Heatmap cell colour per calorie status. Finishing comfortably under the goal
+// is the win, so green is the band below the floor; amber warns as intake nears
+// the goal (within the ±band), rose flags exceeding the ceiling, and a faint
+// slate marks days with no log.
 const STATUS_COLORS: Record<CalorieStatus, string> = {
-  'in-range': 'bg-emerald-500',
-  under: 'bg-amber-400',
+  under: 'bg-emerald-500',
+  'in-range': 'bg-amber-400',
   over: 'bg-rose-500',
   empty: 'bg-slate-100',
 }
 
 const STATUS_LABELS: Record<CalorieStatus, string> = {
-  'in-range': 'In range',
   under: 'Under',
+  'in-range': 'Near goal',
   over: 'Surplus',
   empty: 'No log',
 }
@@ -147,7 +149,7 @@ function MonthlyReport({ loggedFoods, goalHistory, today = todayIso() }: Monthly
         <section aria-label="Calorie heatmap" className={`${cardClass} lg:col-span-2`}>
           <h2 className="mb-1 text-lg font-semibold text-slate-900">Calorie ceiling &amp; floor</h2>
           <p className="mb-4 text-sm text-slate-500">
-            Each logged day against its calorie goal — green is on target, amber under, red over.
+            Each logged day against its calorie goal — green is comfortably under, amber nearing it, red over.
           </p>
           <div className="grid grid-cols-7 gap-1.5">
             {WEEKDAY_HEADS.map((wd) => (
@@ -177,7 +179,7 @@ function MonthlyReport({ loggedFoods, goalHistory, today = todayIso() }: Monthly
           </div>
           {/* Legend */}
           <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-            {(['in-range', 'under', 'over', 'empty'] as CalorieStatus[]).map((status) => (
+            {(['under', 'in-range', 'over', 'empty'] as CalorieStatus[]).map((status) => (
               <span key={status} className="flex items-center gap-1.5">
                 <span className={`inline-block h-3 w-3 rounded ${STATUS_COLORS[status]}`} />
                 {STATUS_LABELS[status]}
