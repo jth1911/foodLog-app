@@ -186,11 +186,25 @@ describe('FoodsPage', () => {
     })
   })
 
-  it('deletes a single food by id', async () => {
+  it('focuses the name field when editing, bringing the form into view', async () => {
+    const user = userEvent.setup()
+    renderPage()
+
+    await user.click(screen.getByRole('button', { name: 'Edit Egg' }))
+    expect(screen.getByLabelText('New food name')).toHaveFocus()
+  })
+
+  it('confirms before deleting a single food', async () => {
     const deleteFood = vi.fn()
+    vi.spyOn(window, 'confirm').mockReturnValue(false)
     const user = userEvent.setup()
     renderPage({ deleteFood })
 
+    await user.click(screen.getByRole('button', { name: 'Delete Egg' }))
+    expect(window.confirm).toHaveBeenCalledOnce()
+    expect(deleteFood).not.toHaveBeenCalled()
+
+    vi.mocked(window.confirm).mockReturnValue(true)
     await user.click(screen.getByRole('button', { name: 'Delete Egg' }))
     expect(deleteFood).toHaveBeenCalledWith('Dairy/Eggs', 'e1')
   })

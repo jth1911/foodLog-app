@@ -33,4 +33,8 @@ Object.defineProperty(globalThis, 'localStorage', {
   value: memoryStorage,
 })
 
+// jsdom doesn't implement scrollIntoView; stub it so components that scroll the
+// edit form into view don't throw under test.
+Element.prototype.scrollIntoView = () => {}
+
 beforeEach(() => memoryStorage.clear())
