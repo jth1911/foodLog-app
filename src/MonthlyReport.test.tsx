@@ -72,6 +72,16 @@ describe('MonthlyReport', () => {
     expect(items[1]).toHaveTextContent('Oats')
   })
 
+  it('lists at most the top 10 foods', () => {
+    // 12 distinct foods, each logged once, all in June.
+    const entries = Array.from({ length: 12 }, (_, i) =>
+      entry({ date: '2026-06-01', description: `Food ${i}` }),
+    )
+    render(<MonthlyReport loggedFoods={entries} goalHistory={goals(2000)} today={TODAY} />)
+    const list = within(screen.getByLabelText('Top foods')).getByRole('list')
+    expect(within(list).getAllByRole('listitem')).toHaveLength(10)
+  })
+
   it('feeds the macro split to the donut', () => {
     const entries = [entry({ date: '2026-06-10', protein: 100, carbs: 100, fat: 0 })]
     render(<MonthlyReport loggedFoods={entries} goalHistory={goals(2000)} today={TODAY} />)

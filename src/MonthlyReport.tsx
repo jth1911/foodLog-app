@@ -102,7 +102,7 @@ function MonthlyReport({ loggedFoods, goalHistory, today = todayIso() }: Monthly
     () => calorieHeatmap(loggedFoods, goalHistory, dates),
     [loggedFoods, goalHistory, dates],
   )
-  const foods = useMemo(() => topFoods(loggedFoods, dates), [loggedFoods, dates])
+  const foods = useMemo(() => topFoods(loggedFoods, dates, 10), [loggedFoods, dates])
   const macroData = useMemo(() => monthlyMacroRatio(loggedFoods, dates), [loggedFoods, dates])
 
   // Forward navigation is clamped at the current month — there's no data ahead.
@@ -193,7 +193,7 @@ function MonthlyReport({ loggedFoods, goalHistory, today = todayIso() }: Monthly
         {/* Top 5 most frequent foods */}
         <section aria-label="Top foods" className={cardClass}>
           <h2 className="mb-1 text-lg font-semibold text-slate-900">Most-logged foods</h2>
-          <p className="mb-4 text-sm text-slate-500">Your 5 most frequent foods this month.</p>
+          <p className="mb-4 text-sm text-slate-500">Your 10 most frequent foods this month.</p>
           {foods.length > 0 ? (
             <ol className="flex flex-col gap-2">
               {foods.map((food, i) => (
