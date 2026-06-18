@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
 import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
@@ -192,6 +193,49 @@ describe('FoodsPage', () => {
     await user.click(screen.getByRole('button', { name: 'Delete category Empty' }))
     expect(confirm).not.toHaveBeenCalled()
     expect(deleteCategory).toHaveBeenCalledWith('Empty')
+  })
+
+  it('does not re-add a category that was the chosen add-target after deleting it', async () => {
+    const addFood = vi.fn()
+    const user = userEvent.setup()
+    // A stateful host so deleting a category actually updates the foods prop,
+    // mirroring the real store wiring (a static prop wouldn't exercise the fix).
+    function Host() {
+      const [data, setData] = useState<Record<string, UserFoodReference[]>>({ Empty: [], Other: [] })
+      return (
+        <FoodsPage
+          foods={data}
+          onSelectFood={noop}
+          addFood={addFood}
+          updateFood={noop}
+          deleteFood={noop}
+          addCategory={noop}
+          deleteCategory={(name) =>
+            setData((prev) => {
+              const next = { ...prev }
+              delete next[name]
+              return next
+            })
+          }
+        />
+      )
+    }
+    render(<Host />)
+
+    // Point the add-target at "Empty", then delete "Empty".
+    await user.selectOptions(screen.getByLabelText('Food category'), 'Empty')
+    await user.click(screen.getByRole('button', { name: 'Delete category Empty' }))
+
+    // Adding a food now falls back to a still-existing category, not the gone one.
+    await user.type(screen.getByLabelText('New food name'), 'Tofu')
+    await user.type(screen.getByLabelText('New food serving size'), '1/2 cup')
+    await user.type(screen.getByLabelText('New food protein'), '10')
+    await user.type(screen.getByLabelText('New food carbs'), '2')
+    await user.type(screen.getByLabelText('New food calories'), '80')
+    await user.click(screen.getByRole('button', { name: 'Add food' }))
+
+    expect(addFood).toHaveBeenCalledTimes(1)
+    expect(addFood.mock.calls[0][0]).toBe('Other')
   })
 
   it('confirms before deleting a non-empty category', async () => {

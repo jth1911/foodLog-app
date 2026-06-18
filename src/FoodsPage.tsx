@@ -177,6 +177,9 @@ function FoodsPage({
     const count = foods[name]?.length ?? 0
     if (count > 0 && !window.confirm(`Delete category "${name}" and its ${count} food(s)?`)) return
     if (editing?.category === name) resetForm()
+    // Drop a stale add-target pointing at the gone category, so the next "Add
+    // food" doesn't resurrect it via addFood's create-if-missing behaviour.
+    if (targetCategory === name) setTargetCategory('')
     deleteCategory(name)
   }
 
