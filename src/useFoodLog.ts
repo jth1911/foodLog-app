@@ -9,7 +9,7 @@ import {
 import { localStorageStore, type FoodLogStore } from './lib/foodLogRepo'
 import { seedFoodsFromJson, type UserFoodReference } from './lib/foods'
 import { type WeightEntry } from './lib/weight'
-import { type FluidEntry } from './lib/fluid'
+import { DEFAULT_TARGET_FLUID, type FluidEntry } from './lib/fluid'
 import { isoWeekOf, weekdayOf } from './lib/dates'
 import { log } from './lib/logger'
 
@@ -184,8 +184,10 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   )
   // Start blank with no seeded drinks — only explicitly-logged fluids are stored.
   const [fluids, setFluids] = useState<FluidEntry[]>(() => store.loadFluids() ?? [])
-  const [targetFluid, setTargetFluidState] = useState<number | null>(() =>
-    store.loadTargetFluid(),
+  // Default to DEFAULT_TARGET_FLUID when nothing is stored, so the dashboard
+  // shows a hydration goal out of the box (persisted on mount, like the seed).
+  const [targetFluid, setTargetFluidState] = useState<number | null>(
+    () => store.loadTargetFluid() ?? DEFAULT_TARGET_FLUID,
   )
 
   // Persist on every change, and on mount (which writes the initial seed/

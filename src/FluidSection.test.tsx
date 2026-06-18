@@ -41,6 +41,18 @@ describe('FluidSection', () => {
     expect(screen.getByLabelText('Fluid total').closest('p')!).not.toHaveTextContent('/')
   })
 
+  it('reads the total in red while under the target', () => {
+    // 24 oz logged against a 95 oz goal → under.
+    renderSection({ targetFluid: 95 })
+    expect(screen.getByLabelText('Fluid total')).toHaveClass('text-rose-600')
+  })
+
+  it('reads the total in green once the target is met', () => {
+    // 24 oz logged against a 20 oz goal → met.
+    renderSection({ targetFluid: 20 })
+    expect(screen.getByLabelText('Fluid total')).toHaveClass('text-emerald-600')
+  })
+
   it('shows an empty state with no drinks', () => {
     renderSection({ fluids: [] })
     expect(screen.getByText(/no drinks logged for this day yet/i)).toBeInTheDocument()

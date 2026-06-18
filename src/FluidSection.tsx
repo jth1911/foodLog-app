@@ -11,9 +11,12 @@ type FluidSectionProps = {
   onDelete: (id: string) => void
 }
 
-const statusClasses: Record<'met' | 'unmet', string> = {
+// Once a target is set, under it reads red and at/over it reads green. Without a
+// target there's nothing to judge against, so the total stays neutral.
+const statusClasses: Record<'met' | 'unmet' | 'none', string> = {
   met: 'text-emerald-600',
-  unmet: 'text-slate-900',
+  unmet: 'text-rose-600',
+  none: 'text-slate-900',
 }
 
 /**
@@ -26,7 +29,7 @@ const statusClasses: Record<'met' | 'unmet', string> = {
 function FluidSection({ fluids, date, targetFluid, onEdit, onDelete }: FluidSectionProps) {
   const totals = fluidTotalsForDate(fluids, date)
   // Progress colour follows the goal only when a target is actually set.
-  const status = targetFluid != null ? fluidGoalStatus(totals.oz, targetFluid) : 'unmet'
+  const status = targetFluid != null ? fluidGoalStatus(totals.oz, targetFluid) : 'none'
 
   // Ask before removing so an accidental tap doesn't drop a drink.
   const confirmDelete = (fluid: FluidEntry) => {

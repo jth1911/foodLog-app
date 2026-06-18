@@ -11,6 +11,10 @@ export const DRINK_TYPES = ['Water', 'Coffee', 'Tea', 'Juice', 'Soda', 'Milk', '
 
 export type DrinkType = (typeof DRINK_TYPES)[number]
 
+// The daily fluid target (fl oz) used until the user sets their own on the Goals
+// tab. Seeded on a first-ever load so the dashboard shows a goal out of the box.
+export const DEFAULT_TARGET_FLUID = 95
+
 // A single logged drink. Calories are the only nutrition tracked (caloric drinks
 // roll into the day's calorie total alongside food); volume is in fluid ounces.
 // Mirrors FoodEntry's id/date/week/weekday stamping so it slots into the same

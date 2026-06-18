@@ -443,6 +443,9 @@ export function DashboardView({
               onSave={(lb) => setWeight(selectedDate, lb)}
             />
 
+            {/* Food log grouped by meal, filtered to the selected date */}
+            <MealFeed loggedFoods={foodsForDate} onDelete={deleteFood} onEdit={setEditingEntry} />
+
             {/* Drinks for the selected day, with oz total + goal progress */}
             <FluidSection
               fluids={fluidsForDate}
@@ -451,9 +454,6 @@ export function DashboardView({
               onEdit={setEditingFluid}
               onDelete={(id) => deleteFluid?.(id)}
             />
-
-            {/* Food log grouped by meal, filtered to the selected date */}
-            <MealFeed loggedFoods={foodsForDate} onDelete={deleteFood} onEdit={setEditingEntry} />
           </main>
         </div>
       </div>

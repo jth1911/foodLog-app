@@ -383,9 +383,9 @@ describe('useFoodLog — fluids', () => {
 })
 
 describe('useFoodLog — target fluid', () => {
-  it('defaults to null when no target is stored', () => {
+  it('defaults to 95 fl oz when no target is stored', () => {
     const { result } = renderHook(() => useFoodLog(makeFakeStore()))
-    expect(result.current.targetFluid).toBeNull()
+    expect(result.current.targetFluid).toBe(95)
   })
 
   it('loads a stored target fluid', () => {
