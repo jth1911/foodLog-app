@@ -8,8 +8,8 @@ import {
 } from './lib/nutrition'
 import { localStorageStore, type FoodLogStore } from './lib/foodLogRepo'
 import { seedFoodsFromJson, type UserFoodReference } from './lib/foods'
-import { materialiseWeights, type WeightEntry } from './lib/weight'
-import { isoWeekOf, todayIso, weekdayOf } from './lib/dates'
+import { type WeightEntry } from './lib/weight'
+import { isoWeekOf, weekdayOf } from './lib/dates'
 import { log } from './lib/logger'
 
 // Fixed date the demo entries live on, decoupled from the real "today" the app
@@ -160,11 +160,11 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   const [foods, setFoods] = useState<Record<string, UserFoodReference[]>>(
     () => store.loadFoods() ?? seedFoodsFromJson(),
   )
-  // Start blank with no seeded weights. Any stored log is materialised forward
-  // to today on load, so a return visit on a new day fills the days since the
-  // last weigh-in.
+  // Start blank with no seeded weights. Only explicitly-recorded days are
+  // stored — there's no automatic carry-forward (the dashboard's "pull forward"
+  // button copies the previous day's weight on demand).
   const [weights, setWeights] = useState<WeightEntry[]>(() =>
-    materialiseWeights(store.loadWeights() ?? [], todayIso()),
+    [...(store.loadWeights() ?? [])].sort(byWeightDate),
   )
   const [targetWeight, setTargetWeightState] = useState<number | null>(() =>
     store.loadTargetWeight(),
@@ -269,15 +269,12 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
     })
   }, [])
 
-  // Upsert the day's weight (a re-entry replaces it), then re-materialise the
-  // carry-forward fill up to today so downstream days inherit the new value.
+  // Upsert the day's weight (a re-entry replaces it), kept sorted by date. Only
+  // this day changes — other days are never auto-filled.
   const setWeight = useCallback((date: string, lb: number) => {
     log('info', 'Weight logged', { date, lb })
     setWeights((prev) =>
-      materialiseWeights(
-        [...prev.filter((w) => w.date !== date), { date, lb }].sort(byWeightDate),
-        todayIso(),
-      ),
+      [...prev.filter((w) => w.date !== date), { date, lb }].sort(byWeightDate),
     )
   }, [])
 

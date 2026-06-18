@@ -359,7 +359,6 @@ describe('Dashboard', () => {
   describe('weight card', () => {
     const weights = [
       { date: '2026-05-01', lb: 180 },
-      { date: '2026-05-02', lb: 180 }, // carried-forward copy
       { date: '2026-05-03', lb: 178 },
     ]
     const renderView = (today: string, setWeight = () => {}) =>
@@ -377,16 +376,21 @@ describe('Dashboard', () => {
         />,
       )
 
-    it('shows the resolved (carried-forward) weight for the selected day', () => {
-      renderView('2026-05-02')
-      expect(screen.getByLabelText('Weight (lb)')).toHaveValue(180)
+    it('shows the recorded weight for a logged day', () => {
+      renderView('2026-05-03')
+      expect(screen.getByLabelText('Weight (lb)')).toHaveValue(178)
+    })
+
+    it('shows 0 for a day with no weigh-in (no carry-forward)', () => {
+      renderView('2026-05-02') // unlogged day between two entries
+      expect(screen.getByLabelText('Weight (lb)')).toHaveValue(0)
     })
 
     it('updates the field as the selected day changes', () => {
       renderView('2026-05-03')
       expect(screen.getByLabelText('Weight (lb)')).toHaveValue(178)
       fireEvent.click(screen.getByRole('button', { name: 'Previous day' }))
-      expect(screen.getByLabelText('Weight (lb)')).toHaveValue(180) // carried on 05-02
+      expect(screen.getByLabelText('Weight (lb)')).toHaveValue(0) // 05-02 unlogged
     })
 
     it('saves the entered weight for the selected day', async () => {
@@ -402,18 +406,38 @@ describe('Dashboard', () => {
       expect(setWeight).toHaveBeenCalledWith('2026-05-03', 177.5)
     })
 
-    it('rejects a non-positive weight', async () => {
+    it('pulls the previous day’s weight forward into the field', async () => {
+      const user = userEvent.setup()
+      renderView('2026-05-02') // unlogged; previous weigh-in is 05-01 at 180
+      const input = screen.getByLabelText('Weight (lb)')
+      expect(input).toHaveValue(0)
+      await user.click(screen.getByRole('button', { name: /pull forward/i }))
+      expect(input).toHaveValue(180)
+    })
+
+    it('disables pull-forward when there is no earlier weigh-in', () => {
+      renderView('2026-05-01') // the first-ever weigh-in: nothing before it
+      expect(screen.getByRole('button', { name: /pull forward/i })).toBeDisabled()
+    })
+
+    it('rejects a negative weight but allows zero', async () => {
       const user = userEvent.setup()
       const setWeight = vi.fn()
       renderView('2026-05-03', setWeight)
+      const saveButton = () =>
+        within(screen.getByRole('region', { name: 'Weight' })).getByRole('button', { name: 'Save' })
 
       const input = screen.getByLabelText('Weight (lb)')
       await user.clear(input)
-      await user.type(input, '0')
-      await user.click(within(screen.getByRole('region', { name: 'Weight' })).getByRole('button', { name: 'Save' }))
-
+      await user.type(input, '-5')
+      await user.click(saveButton())
       expect(setWeight).not.toHaveBeenCalled()
-      expect(screen.getByRole('alert')).toHaveTextContent(/greater than zero/i)
+      expect(screen.getByRole('alert')).toHaveTextContent(/zero or more/i)
+
+      await user.clear(input)
+      await user.type(input, '0')
+      await user.click(saveButton())
+      expect(setWeight).toHaveBeenCalledWith('2026-05-03', 0)
     })
   })
 })

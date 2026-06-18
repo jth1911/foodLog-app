@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest'
 import {
-  resolveWeight,
-  materialiseWeights,
+  weightForDate,
+  previousWeight,
   movingAverage,
   weightSeries,
   type WeightEntry,
@@ -14,23 +14,34 @@ const history: WeightEntry[] = [
   { date: '2026-06-07', lb: 178 },
 ]
 
-describe('resolveWeight', () => {
-  it('returns null for a date before the first weigh-in', () => {
-    expect(resolveWeight(history, '2026-05-31')).toBeNull()
+describe('weightForDate', () => {
+  it('returns the recorded weight on a logged day', () => {
+    expect(weightForDate(history, '2026-06-04')).toBe(179)
   })
 
-  it('returns the exact value on an entered day', () => {
-    expect(resolveWeight(history, '2026-06-04')).toBe(179)
+  it('returns null on a day with no weigh-in (no carry-forward)', () => {
+    expect(weightForDate(history, '2026-06-02')).toBeNull()
+    expect(weightForDate(history, '2026-06-08')).toBeNull()
   })
 
-  it('carries forward the previous day on a gap day', () => {
-    expect(resolveWeight(history, '2026-06-02')).toBe(180)
-    expect(resolveWeight(history, '2026-06-03')).toBe(180)
-    expect(resolveWeight(history, '2026-06-05')).toBe(179)
+  it('returns null for empty history', () => {
+    expect(weightForDate([], '2026-06-01')).toBeNull()
+  })
+})
+
+describe('previousWeight', () => {
+  it('returns the most recent weight strictly before the date', () => {
+    expect(previousWeight(history, '2026-06-04')).toBe(180) // not 06-04 itself
+    expect(previousWeight(history, '2026-06-06')).toBe(179) // last before 06-06
   })
 
-  it('carries the last value forward indefinitely', () => {
-    expect(resolveWeight(history, '2026-12-25')).toBe(178)
+  it('reaches back across multi-day gaps to the last weigh-in', () => {
+    expect(previousWeight(history, '2026-06-20')).toBe(178)
+  })
+
+  it('returns null when there is no earlier weigh-in', () => {
+    expect(previousWeight(history, '2026-06-01')).toBeNull()
+    expect(previousWeight(history, '2026-05-31')).toBeNull()
   })
 
   it('handles an unsorted history defensively', () => {
@@ -38,81 +49,7 @@ describe('resolveWeight', () => {
       { date: '2026-06-07', lb: 178 },
       { date: '2026-06-01', lb: 180 },
     ]
-    expect(resolveWeight(unsorted, '2026-06-03')).toBe(180)
-  })
-
-  it('returns null for empty history', () => {
-    expect(resolveWeight([], '2026-06-01')).toBeNull()
-  })
-})
-
-describe('materialiseWeights', () => {
-  it('fills every gap day from the first entry up to today', () => {
-    const filled = materialiseWeights(
-      [
-        { date: '2026-06-01', lb: 180 },
-        { date: '2026-06-04', lb: 179 },
-      ],
-      '2026-06-05',
-    )
-    expect(filled).toEqual([
-      { date: '2026-06-01', lb: 180 },
-      { date: '2026-06-02', lb: 180 },
-      { date: '2026-06-03', lb: 180 },
-      { date: '2026-06-04', lb: 179 },
-      { date: '2026-06-05', lb: 179 },
-    ])
-  })
-
-  it('never writes rows past today', () => {
-    const filled = materialiseWeights([{ date: '2026-06-01', lb: 180 }], '2026-06-03')
-    expect(filled.map((e) => e.date)).toEqual(['2026-06-01', '2026-06-02', '2026-06-03'])
-  })
-
-  it('is idempotent on already-materialised input', () => {
-    const once = materialiseWeights([{ date: '2026-06-01', lb: 180 }], '2026-06-04')
-    expect(materialiseWeights(once, '2026-06-04')).toEqual(once)
-  })
-
-  it('returns an empty array for empty history', () => {
-    expect(materialiseWeights([], '2026-06-04')).toEqual([])
-  })
-
-  it('preserves an explicit future entry without back-filling up to it', () => {
-    const filled = materialiseWeights(
-      [
-        { date: '2026-06-01', lb: 180 },
-        { date: '2026-06-10', lb: 175 }, // future relative to today
-      ],
-      '2026-06-03',
-    )
-    expect(filled).toEqual([
-      { date: '2026-06-01', lb: 180 },
-      { date: '2026-06-02', lb: 180 },
-      { date: '2026-06-03', lb: 180 },
-      { date: '2026-06-10', lb: 175 },
-    ])
-  })
-
-  it('keeps an entirely-future history untouched (no fill)', () => {
-    const future: WeightEntry[] = [{ date: '2026-07-01', lb: 170 }]
-    expect(materialiseWeights(future, '2026-06-03')).toEqual(future)
-  })
-
-  it('respects a later explicit entry overriding the carried value', () => {
-    const filled = materialiseWeights(
-      [
-        { date: '2026-06-01', lb: 180 },
-        { date: '2026-06-03', lb: 182 },
-      ],
-      '2026-06-04',
-    )
-    expect(filled).toEqual([
-      { date: '2026-06-01', lb: 180 },
-      { date: '2026-06-02', lb: 180 },
-      { date: '2026-06-03', lb: 182 },
-      { date: '2026-06-04', lb: 182 },
-    ])
+    expect(previousWeight(unsorted, '2026-06-05')).toBe(180)
   })
 })
 
@@ -136,21 +73,27 @@ describe('movingAverage', () => {
 })
 
 describe('weightSeries', () => {
-  it('produces one carried-forward point per date with weekday + trend', () => {
-    const dates = ['2026-06-01', '2026-06-02', '2026-06-03']
-    const series = weightSeries([{ date: '2026-06-01', lb: 180 }], dates)
-    expect(series).toEqual([
-      { date: '2026-06-01', weekday: weekdayOf('2026-06-01'), lb: 180, trend: 180 },
-      { date: '2026-06-02', weekday: weekdayOf('2026-06-02'), lb: 180, trend: 180 },
-      { date: '2026-06-03', weekday: weekdayOf('2026-06-03'), lb: 180, trend: 180 },
-    ])
+  it('plots only recorded days, leaving gaps (null) for unlogged ones', () => {
+    const dates = ['2026-06-01', '2026-06-02', '2026-06-03', '2026-06-04']
+    const series = weightSeries(history, dates)
+    expect(series.map((p) => p.lb)).toEqual([180, null, null, 179])
   })
 
-  it('leaves a leading gap (null) before the first weigh-in', () => {
-    const dates = ['2026-05-30', '2026-05-31', '2026-06-01']
-    const series = weightSeries([{ date: '2026-06-01', lb: 180 }], dates)
-    expect(series[0]).toMatchObject({ lb: null, trend: null })
-    expect(series[1]).toMatchObject({ lb: null, trend: null })
-    expect(series[2]).toMatchObject({ lb: 180, trend: 180 })
+  it('pairs each recorded day with weekday and a trailing-average trend', () => {
+    const dates = ['2026-06-01', '2026-06-04']
+    const series = weightSeries(history, dates)
+    expect(series[0]).toEqual({
+      date: '2026-06-01',
+      weekday: weekdayOf('2026-06-01'),
+      lb: 180,
+      trend: 180,
+    })
+    // Trend averages the recorded values seen so far (gaps skipped): (180+179)/2.
+    expect(series[1]).toMatchObject({ date: '2026-06-04', lb: 179, trend: 179.5 })
+  })
+
+  it('is all-null when nothing is logged in the window', () => {
+    const series = weightSeries([], ['2026-06-01', '2026-06-02'])
+    expect(series.every((p) => p.lb === null && p.trend === null)).toBe(true)
   })
 })

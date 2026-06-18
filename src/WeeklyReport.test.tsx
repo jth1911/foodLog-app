@@ -157,7 +157,7 @@ describe('WeeklyReport', () => {
     expect(screen.getByText('No weight logged this week.')).toBeInTheDocument()
   })
 
-  it('feeds the weight chart a carried-forward 7-day series', () => {
+  it('feeds the weight chart only the recorded days (gaps stay null)', () => {
     const weights = [
       { date: '2026-06-11', lb: 180 },
       { date: '2026-06-14', lb: 179 },
@@ -165,8 +165,10 @@ describe('WeeklyReport', () => {
     render(<WeeklyReport loggedFoods={[]} goalHistory={goals} today={TODAY} weights={weights} />)
     const data = chartDataIn('Weight trend') as { date: string; lb: number | null }[]
     expect(data).toHaveLength(7)
-    expect(data.find((d) => d.date === '2026-06-12')!.lb).toBe(180) // carried forward
-    expect(data.find((d) => d.date === '2026-06-17')!.lb).toBe(179) // last value held
+    expect(data.find((d) => d.date === '2026-06-11')!.lb).toBe(180)
+    expect(data.find((d) => d.date === '2026-06-14')!.lb).toBe(179)
+    expect(data.find((d) => d.date === '2026-06-12')!.lb).toBeNull() // unlogged → gap
+    expect(data.find((d) => d.date === '2026-06-17')!.lb).toBeNull() // unlogged → gap
   })
 
   it('renders the target reference line on the weight chart when set', () => {

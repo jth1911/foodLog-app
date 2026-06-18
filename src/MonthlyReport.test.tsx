@@ -157,7 +157,7 @@ describe('MonthlyReport', () => {
       expect(screen.getByText('No weight logged this month.')).toBeInTheDocument()
     })
 
-    it('feeds the line chart a carried-forward weight series for the month', () => {
+    it('feeds the line chart only the recorded days for the month (gaps null)', () => {
       render(
         <MonthlyReport
           loggedFoods={[]}
@@ -169,8 +169,8 @@ describe('MonthlyReport', () => {
       const data = chartDataIn('Weight trend') as { date: string; lb: number | null }[]
       expect(data).toHaveLength(30) // June
       expect(data.find((d) => d.date === '2026-06-01')!.lb).toBe(180)
-      expect(data.find((d) => d.date === '2026-06-10')!.lb).toBe(180) // carried forward
       expect(data.find((d) => d.date === '2026-06-15')!.lb).toBe(178)
+      expect(data.find((d) => d.date === '2026-06-10')!.lb).toBeNull() // unlogged → gap
     })
 
     it('renders the target reference line when a target is set', () => {

@@ -15,7 +15,7 @@ import MealFeed from './MealFeed'
 import AddFoodModal, { type NewFoodInput } from './AddFoodModal'
 import BulkImportModal from './BulkImportModal'
 import { addDays, dateToIso, isoToDate, isoWeekOf, todayIso, weekdayOf } from './lib/dates'
-import { resolveWeight, type WeightEntry } from './lib/weight'
+import { weightForDate, previousWeight, type WeightEntry } from './lib/weight'
 import { useFoodLog } from './useFoodLog'
 
 const statusClasses: Record<'met' | 'unmet', string> = {
@@ -38,29 +38,40 @@ function formatDateLabel(iso: string): string {
 }
 
 /**
- * The selected day's weight entry. Shows the carried-forward value when the day
- * has no explicit weigh-in (resolved from earlier days), and saving overwrites
- * that day's record. The caller keys this on the selected date, so stepping
- * between days remounts it fresh with that day's resolved weight.
+ * The selected day's weight entry. A day with no weigh-in shows 0 — there's no
+ * automatic carry-forward; the "Pull forward from previous day" button copies
+ * the most recent earlier weight into the field (left to save). Saving records
+ * that day's weight. The caller keys this on the selected date, so stepping
+ * between days remounts it fresh with that day's value.
  */
 function WeightCard({
   weight,
+  previous,
   onSave,
 }: {
-  weight: number | null
+  // The recorded weight for the day, or 0 when there's none yet.
+  weight: number
+  // The previous day's weight to pull forward, or null when there's none.
+  previous: number | null
   onSave: (lb: number) => void
 }) {
-  const [value, setValue] = useState(weight != null ? String(weight) : '')
+  const [value, setValue] = useState(String(weight))
   const [error, setError] = useState<string | null>(null)
 
   const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault()
     const lb = Number(value.trim())
-    if (value.trim() === '' || !Number.isFinite(lb) || lb <= 0) {
-      setError('Enter a weight greater than zero.')
+    if (value.trim() === '' || !Number.isFinite(lb) || lb < 0) {
+      setError('Enter a weight of zero or more.')
       return
     }
     onSave(lb)
+    setError(null)
+  }
+
+  const pullForward = () => {
+    if (previous == null) return
+    setValue(String(previous))
     setError(null)
   }
 
@@ -71,7 +82,7 @@ function WeightCard({
     >
       <h2 className="mb-1 text-lg font-semibold text-slate-900">Weight</h2>
       <p className="mb-4 text-sm text-slate-500">
-        Your weight for this day, in pounds. A day with no weigh-in inherits the previous day's.
+        Your weight for this day, in pounds. Use “Pull forward” to copy the previous day's weight.
       </p>
       <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2" noValidate>
         <input
@@ -80,7 +91,6 @@ function WeightCard({
           step="any"
           inputMode="decimal"
           aria-label="Weight (lb)"
-          placeholder="—"
           value={value}
           onChange={(e) => setValue(e.target.value)}
           className="w-28 rounded-md border border-slate-300 px-3 py-2 text-right text-slate-800 focus:border-slate-500 focus:outline-none"
@@ -91,6 +101,15 @@ function WeightCard({
           className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 focus:outline-none"
         >
           Save
+        </button>
+        <button
+          type="button"
+          onClick={pullForward}
+          disabled={previous == null}
+          title={previous == null ? 'No earlier weight to pull forward.' : undefined}
+          className="rounded-md border border-slate-300 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-100 focus:outline-none disabled:cursor-not-allowed disabled:opacity-40"
+        >
+          Pull forward from previous day
         </button>
         {error && (
           <p role="alert" className="w-full text-sm text-rose-600">
@@ -189,10 +208,14 @@ export function DashboardView({
     [goalHistory, selectedDate],
   )
 
-  // The weight in effect on the viewed day — an explicit weigh-in, or the
-  // carried-forward value from an earlier day.
+  // The weight recorded on the viewed day (0 when none), plus the previous
+  // weigh-in available to pull forward.
   const dayWeight = useMemo(
-    () => resolveWeight(weights, selectedDate),
+    () => weightForDate(weights, selectedDate) ?? 0,
+    [weights, selectedDate],
+  )
+  const previousDayWeight = useMemo(
+    () => previousWeight(weights, selectedDate),
     [weights, selectedDate],
   )
 
@@ -348,11 +371,12 @@ export function DashboardView({
               </dl>
             </section>
 
-            {/* Weight for the selected day (carried forward when unset). Keyed
-                on the date so navigating days remounts with that day's value. */}
+            {/* Weight for the selected day (0 when unset). Keyed on the date so
+                navigating days remounts with that day's value. */}
             <WeightCard
               key={selectedDate}
               weight={dayWeight}
+              previous={previousDayWeight}
               onSave={(lb) => setWeight(selectedDate, lb)}
             />
 

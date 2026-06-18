@@ -4,7 +4,6 @@ import { useFoodLog, SEED_FOODS } from './useFoodLog'
 import type { FoodLogStore } from './lib/foodLogRepo'
 import { seedFoodsFromJson, type UserFoodReference } from './lib/foods'
 import { type WeightEntry } from './lib/weight'
-import { todayIso } from './lib/dates'
 import { DEFAULT_GOALS, GOALS_EPOCH, type FoodEntry, type GoalChange, type Goals } from './lib/nutrition'
 
 const makeEntry = (id: string): FoodEntry => ({
@@ -263,14 +262,17 @@ describe('useFoodLog — reference foods', () => {
 })
 
 describe('useFoodLog — weights', () => {
-  it('loads a stored weight log, materialised forward to today', () => {
-    const stored: WeightEntry[] = [{ date: '2026-06-01', lb: 180 }]
+  it('loads a stored weight log sorted by date, without inventing days', () => {
+    const stored: WeightEntry[] = [
+      { date: '2026-06-04', lb: 179 },
+      { date: '2026-06-01', lb: 180 },
+    ]
     const { result } = renderHook(() => useFoodLog(makeFakeStore(null, null, null, null, stored)))
-    // The first explicit day survives, and the fill reaches today.
-    expect(result.current.weights[0]).toEqual({ date: '2026-06-01', lb: 180 })
-    expect(result.current.weights[result.current.weights.length - 1].date).toBe(todayIso())
-    // Every materialised day carries the only logged value forward.
-    expect(result.current.weights.every((w) => w.lb === 180)).toBe(true)
+    // Only the two recorded days exist (no carry-forward fill), sorted ascending.
+    expect(result.current.weights).toEqual([
+      { date: '2026-06-01', lb: 180 },
+      { date: '2026-06-04', lb: 179 },
+    ])
   })
 
   it('starts with an empty weight log when storage is empty', () => {
@@ -278,14 +280,15 @@ describe('useFoodLog — weights', () => {
     expect(result.current.weights).toEqual([])
   })
 
-  it('upserts a day and re-materialises the carry-forward fill', () => {
+  it('upserts a single day without auto-filling the gaps', () => {
     const stored: WeightEntry[] = [{ date: '2026-06-01', lb: 180 }]
     const { result } = renderHook(() => useFoodLog(makeFakeStore(null, null, null, null, stored)))
 
     act(() => result.current.setWeight('2026-06-03', 178))
     const onDate = (d: string) => result.current.weights.find((w) => w.date === d)
-    expect(onDate('2026-06-02')).toEqual({ date: '2026-06-02', lb: 180 }) // carried
-    expect(onDate('2026-06-03')).toEqual({ date: '2026-06-03', lb: 178 }) // explicit
+    expect(onDate('2026-06-02')).toBeUndefined() // no carried day invented
+    expect(onDate('2026-06-03')).toEqual({ date: '2026-06-03', lb: 178 })
+    expect(result.current.weights).toHaveLength(2)
 
     // Re-entering the same day overwrites it rather than duplicating.
     act(() => result.current.setWeight('2026-06-03', 177))
