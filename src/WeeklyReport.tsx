@@ -20,9 +20,11 @@ import {
   dailyMacroSeries,
   fiberSeries,
   mealCalorieBreakdown,
+  proteinByFoodGroup,
   proteinStreak,
   weekWindow,
 } from './lib/weekly'
+import { buildFoodCategoryIndex, type UserFoodReference } from './lib/foods'
 import { addDays, todayIso } from './lib/dates'
 
 // Meal colours mirror the meal headers elsewhere in the app (blue / green /
@@ -33,6 +35,20 @@ const MEAL_COLORS: Record<MealType, string> = {
   Lunch: '#16a34a',
   Dinner: '#9333ea',
   Snacks: '#d97706',
+}
+
+// Distinct hues per food-group category for the protein-source pie. Falls back
+// to slate for any non-canonical category the library introduces.
+const PROTEIN_SOURCE_COLORS: Record<string, string> = {
+  'Dairy/Eggs': '#2563eb',
+  'Meat/Poultry': '#dc2626',
+  Seafood: '#0891b2',
+  Vegetables: '#16a34a',
+  Legumes: '#9333ea',
+  'Whole Grains': '#d97706',
+  'Nuts/Seeds': '#a16207',
+  Supplements: '#db2777',
+  Other: '#64748b',
 }
 
 // Distinct hues for the three macro trend lines.
@@ -74,6 +90,10 @@ function formatRange(dates: string[]): string {
 type WeeklyReportProps = {
   loggedFoods: FoodEntry[]
   goalHistory: GoalChange[]
+  // The user-managed food library, keyed by category. Used to map each logged
+  // entry's free-text description back to its food group for the protein pie.
+  // Optional (defaults to empty) so callers/tests without a library still work.
+  foods?: Record<string, UserFoodReference[]>
   // The day the rolling window ends on. Defaults to the real current date;
   // injectable so tests pin a known day instead of the live clock.
   today?: string
@@ -95,7 +115,12 @@ function renderSliceLabel(props: { name?: string; percent?: number }): string {
  * goals — the protein streak and fiber target read the goal in effect on each
  * day, so editing goals on the Goals tab flows straight through here.
  */
-function WeeklyReport({ loggedFoods, goalHistory, today = todayIso() }: WeeklyReportProps) {
+function WeeklyReport({
+  loggedFoods,
+  goalHistory,
+  foods = {},
+  today = todayIso(),
+}: WeeklyReportProps) {
   const [endDate, setEndDate] = useState(today)
 
   const dates = useMemo(() => weekWindow(endDate), [endDate])
@@ -109,6 +134,11 @@ function WeeklyReport({ loggedFoods, goalHistory, today = todayIso() }: WeeklyRe
     [loggedFoods, goalHistory, dates],
   )
   const mealData = useMemo(() => mealCalorieBreakdown(loggedFoods, dates), [loggedFoods, dates])
+  const categoryIndex = useMemo(() => buildFoodCategoryIndex(foods), [foods])
+  const proteinSourceData = useMemo(
+    () => proteinByFoodGroup(loggedFoods, dates, categoryIndex),
+    [loggedFoods, dates, categoryIndex],
+  )
 
   // Targets shown in the headings come from the goal in effect on the window's
   // latest day, matching what the streak/fiber charts judge against.
@@ -118,6 +148,8 @@ function WeeklyReport({ loggedFoods, goalHistory, today = todayIso() }: WeeklyRe
   const allHit = streak.daysHit === streak.total
   const hasCalories = mealData.some((m) => m.calories > 0)
   const visibleSlices = mealData.filter((m) => m.calories > 0)
+  const hasProtein = proteinSourceData.some((p) => p.protein > 0)
+  const visibleProteinSlices = proteinSourceData.filter((p) => p.protein > 0)
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -255,6 +287,40 @@ function WeeklyReport({ loggedFoods, goalHistory, today = todayIso() }: WeeklyRe
             </div>
           ) : (
             <p className="py-12 text-center text-sm text-slate-400">No calories logged this week.</p>
+          )}
+        </section>
+
+        {/* Protein source breakdown by food group */}
+        <section aria-label="Protein sources" className={`${cardClass} lg:col-span-2`}>
+          <h2 className="mb-1 text-lg font-semibold text-slate-900">Where your protein comes from</h2>
+          <p className="mb-4 text-sm text-slate-500">Share of the week's protein by food group.</p>
+          {hasProtein ? (
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={visibleProteinSlices}
+                    dataKey="protein"
+                    nameKey="category"
+                    cx="50%"
+                    cy="50%"
+                    outerRadius={100}
+                    label={renderSliceLabel}
+                  >
+                    {visibleProteinSlices.map((slice) => (
+                      <Cell
+                        key={slice.category}
+                        fill={PROTEIN_SOURCE_COLORS[slice.category] ?? '#64748b'}
+                      />
+                    ))}
+                  </Pie>
+                  <Tooltip formatter={(value, name) => [`${value} g`, name]} />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="py-12 text-center text-sm text-slate-400">No protein logged this week.</p>
           )}
         </section>
       </div>

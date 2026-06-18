@@ -5,9 +5,17 @@ import {
   proteinStreak,
   fiberSeries,
   mealCalorieBreakdown,
+  proteinByFoodGroup,
+  resolveFoodGroup,
 } from './weekly'
 import { GOALS_EPOCH, type FoodEntry, type GoalChange } from './nutrition'
+import { buildFoodCategoryIndex, type UserFoodReference } from './foods'
 import { isoWeekOf, weekdayOf } from './dates'
+
+// A reference food carrying only the fields the category index reads.
+function refFood(name: string): UserFoodReference {
+  return { id: name, food: name, serving_size: '1', protein: 0, carbs: 0, calories: 0 }
+}
 
 // Build a FoodEntry with sensible defaults, overriding only what a test cares
 // about. Week/weekday are derived so entries stay internally consistent.
@@ -194,5 +202,117 @@ describe('mealCalorieBreakdown', () => {
     const breakdown = mealCalorieBreakdown([], dates)
     expect(breakdown).toHaveLength(4)
     expect(breakdown.every((b) => b.calories === 0 && b.share === 0)).toBe(true)
+  })
+})
+
+describe('proteinByFoodGroup', () => {
+  const dates = weekWindow('2026-06-17')
+  const index = buildFoodCategoryIndex({
+    'Meat/Poultry': [refFood('Chicken Breast (skinless)')],
+    'Dairy/Eggs': [refFood('Greek yogurt (non fat, plain)')],
+    Legumes: [refFood('Lentils')],
+  })
+
+  it('sums protein per food group across the window with percentages', () => {
+    const entries = [
+      entry({ date: '2026-06-17', description: 'Chicken breast', protein: 30 }),
+      entry({ date: '2026-06-16', description: 'Chicken breast', protein: 18 }),
+      entry({ date: '2026-06-15', description: 'Greek yogurt', protein: 16 }),
+      entry({ date: '2026-06-14', description: 'Lentils', protein: 36 }),
+    ]
+    const breakdown = proteinByFoodGroup(entries, dates, index)
+    const byCategory = Object.fromEntries(breakdown.map((b) => [b.category, b]))
+    expect(byCategory['Meat/Poultry'].protein).toBe(48)
+    expect(byCategory['Meat/Poultry'].share).toBe(48) // 48 / 100
+    expect(byCategory['Dairy/Eggs'].share).toBe(16)
+    expect(byCategory['Legumes'].share).toBe(36)
+    expect(byCategory['Seafood'].protein).toBe(0)
+  })
+
+  it('matches descriptions case- and whitespace-insensitively', () => {
+    const entries = [entry({ date: '2026-06-17', description: '  CHICKEN Breast ', protein: 25 })]
+    const byCategory = Object.fromEntries(
+      proteinByFoodGroup(entries, dates, index).map((b) => [b.category, b]),
+    )
+    expect(byCategory['Meat/Poultry'].protein).toBe(25)
+  })
+
+  it('routes unmatched descriptions to Other', () => {
+    const entries = [entry({ date: '2026-06-17', description: 'Mystery shake', protein: 20 })]
+    const byCategory = Object.fromEntries(
+      proteinByFoodGroup(entries, dates, index).map((b) => [b.category, b]),
+    )
+    expect(byCategory['Other'].protein).toBe(20)
+    expect(byCategory['Other'].share).toBe(100)
+  })
+
+  it('ignores entries outside the window', () => {
+    const entries = [entry({ date: '2026-06-09', description: 'Chicken breast', protein: 99 })]
+    const byCategory = Object.fromEntries(
+      proteinByFoodGroup(entries, dates, index).map((b) => [b.category, b]),
+    )
+    expect(byCategory['Meat/Poultry'].protein).toBe(0)
+  })
+
+  it('returns the canonical categories at 0g with no protein logged', () => {
+    const breakdown = proteinByFoodGroup([], dates, index)
+    expect(breakdown).toHaveLength(9)
+    expect(breakdown.every((b) => b.protein === 0 && b.share === 0)).toBe(true)
+    expect(breakdown.map((b) => b.category)).toEqual(
+      expect.arrayContaining(['Supplements', 'Other']),
+    )
+  })
+
+  it('keyword-classifies supplements logged as free text', () => {
+    const entries = [entry({ date: '2026-06-17', description: 'Morning whey shake', protein: 25 })]
+    const byCategory = Object.fromEntries(
+      proteinByFoodGroup(entries, dates, index).map((b) => [b.category, b]),
+    )
+    expect(byCategory['Supplements'].protein).toBe(25)
+    expect(byCategory['Other'].protein).toBe(0)
+  })
+})
+
+describe('resolveFoodGroup', () => {
+  const index = buildFoodCategoryIndex({
+    'Meat/Poultry': [refFood('Chicken Breast (skinless)')],
+    'Dairy/Eggs': [refFood('Greek yogurt (non fat, plain)')],
+    'Nuts/Seeds': [refFood('Chia Seeds')],
+    Legumes: [refFood('Black Beans')],
+    Other: [refFood('My Whey Scoop')], // a supplement the user filed under Other
+  })
+
+  it('returns an exact, non-Other library match unchanged', () => {
+    expect(resolveFoodGroup('Greek yogurt (non fat, plain)', index)).toBe('Dairy/Eggs')
+  })
+
+  it('token-matches verbose descriptions to their generic library food', () => {
+    expect(resolveFoodGroup('Stonyfield Organic Greek Plain Nonfat Yogurt', index)).toBe('Dairy/Eggs')
+    expect(resolveFoodGroup('Chicken Breast x 2', index)).toBe('Meat/Poultry')
+    expect(resolveFoodGroup('Organic Chia Seed', index)).toBe('Nuts/Seeds')
+    expect(resolveFoodGroup("Fillo's Cuban Black Beans Sofrito", index)).toBe('Legumes')
+  })
+
+  it('upgrades an Other-filed match to Supplements when a keyword matches', () => {
+    // Exact-matches "my whey scoop" → Other, but "whey" upgrades it.
+    expect(resolveFoodGroup('My Whey Scoop', index)).toBe('Supplements')
+  })
+
+  it('keyword-classifies unmatched free-text supplements', () => {
+    expect(resolveFoodGroup('Protein Powder (vanilla)', index)).toBe('Supplements')
+    expect(resolveFoodGroup('Casein before bed', index)).toBe('Supplements')
+    expect(resolveFoodGroup('Collagen Peptide', index)).toBe('Supplements')
+  })
+
+  it('falls back to generic aliases for groups with no specific food', () => {
+    expect(resolveFoodGroup('Steak', index)).toBe('Meat/Poultry')
+    expect(resolveFoodGroup('Grilled Fish', index)).toBe('Seafood')
+  })
+
+  it('does not misclassify ordinary or unknown foods', () => {
+    expect(resolveFoodGroup('High-protein bread', index)).toBe('Other')
+    expect(resolveFoodGroup('Unknown thing', index)).toBe('Other')
+    // "fish" is word-boundary matched, so a brand like Fillo's never trips it.
+    expect(resolveFoodGroup("Fillo's Tex-Mex Pinto Beans", index)).toBe('Other')
   })
 })

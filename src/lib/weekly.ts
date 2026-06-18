@@ -13,6 +13,7 @@ import {
   type MealType,
 } from './nutrition'
 import { addDays, weekdayOf } from './dates'
+import { roundMacro, tokenizeFoodName, type FoodCategoryIndex } from './foods'
 
 /**
  * The `days` ISO dates ending at (and including) `endDate`, ascending. Defaults
@@ -143,4 +144,122 @@ export function mealCalorieBreakdown(entries: FoodEntry[], dates: string[]): Mea
     calories: caloriesByMeal[mealType],
     share: total === 0 ? 0 : Math.round((caloriesByMeal[mealType] / total) * 100),
   }))
+}
+
+// Canonical food-group categories, in the order the pie's legend lists them.
+// Mirrors the keys of proteinSources.json plus the catch-all "Other"; the
+// breakdown always emits these (even at 0g) so colours and legend stay stable.
+export const PROTEIN_SOURCE_CATEGORIES = [
+  'Dairy/Eggs',
+  'Meat/Poultry',
+  'Seafood',
+  'Vegetables',
+  'Legumes',
+  'Whole Grains',
+  'Nuts/Seeds',
+  'Supplements',
+  'Other',
+] as const
+
+// Substrings that mark an entry as a protein supplement even when its description
+// doesn't match a library food by name — the bulk of "Other" tends to be these.
+// Kept specific (multi-word / unambiguous) so a normal food never trips them;
+// bare "protein" is deliberately excluded ("high-protein bread" is not a supp).
+const SUPPLEMENT_KEYWORDS = [
+  'protein powder',
+  'protein shake',
+  'protein isolate',
+  'whey',
+  'casein',
+  'mass gainer',
+  'collagen',
+]
+
+// Generic terms that name a food group but no specific library food — a last
+// resort, only consulted after exact and token matching miss. Keys are single
+// lower-cased tokens (matched against the description's tokens, so word-boundary
+// safe: "fish" hits "Grilled Fish" but not "Fillo's").
+const FOOD_GROUP_ALIASES: Record<string, string> = {
+  steak: 'Meat/Poultry',
+  fish: 'Seafood',
+  poke: 'Seafood',
+}
+
+/**
+ * Resolve one entry's free-text `description` to a food group, most-confident
+ * rule first:
+ *   1. exact library-name match to an explicit non-"Other" category — respected;
+ *   2. token-subset match — a library food whose every key token appears in the
+ *      description (most-specific food wins, since the index is sorted that way);
+ *   3. a supplement keyword (whey, casein, …) → "Supplements";
+ *   4. a generic alias (steak → Meat/Poultry, …);
+ *   5. otherwise "Other".
+ * Steps 2–4 also upgrade an entry that exact-matched the catch-all "Other", so a
+ * verbose or generic description still finds its group.
+ */
+export function resolveFoodGroup(description: string, index: FoodCategoryIndex): string {
+  const key = description.trim().toLowerCase()
+  const exact = index.exact.get(key)
+  if (exact && exact !== 'Other') return exact
+
+  const descTokens = new Set(tokenizeFoodName(description))
+  for (const food of index.tokenized) {
+    if (food.category !== 'Other' && food.tokens.every((token) => descTokens.has(token))) {
+      return food.category
+    }
+  }
+
+  if (SUPPLEMENT_KEYWORDS.some((keyword) => key.includes(keyword))) return 'Supplements'
+  for (const [alias, category] of Object.entries(FOOD_GROUP_ALIASES)) {
+    if (descTokens.has(alias)) return category
+  }
+  return exact ?? 'Other'
+}
+
+export type ProteinSourceSlice = {
+  category: string
+  protein: number
+  // Share of the window's total protein, rounded to a whole percent (0 when no
+  // protein at all). Named `share` (not `percent`) for the same reason as
+  // MealSlice — so it can't shadow Recharts' computed `percent` in a pie label.
+  share: number
+}
+
+/**
+ * Total protein per food-group category across the window, with each category's
+ * share of the total as a whole-number percent. Mirrors mealCalorieBreakdown.
+ *
+ * `FoodEntry.description` carries no category, so each entry's description is
+ * matched against `categoryIndex` — the live food library keyed by name (see
+ * buildFoodCategoryIndex) — via resolveFoodGroup, which also keyword-classifies
+ * supplements and falls back to "Other". Always returns the canonical categories
+ * (plus any extra ones the library introduced, appended) so total protein is
+ * conserved and the legend is stable even when a category is empty.
+ */
+export function proteinByFoodGroup(
+  entries: FoodEntry[],
+  dates: string[],
+  categoryIndex: FoodCategoryIndex,
+): ProteinSourceSlice[] {
+  const inWindow = new Set(dates)
+  const proteinByCategory = new Map<string, number>()
+  for (const food of entries) {
+    if (!inWindow.has(food.date)) continue
+    const category = resolveFoodGroup(food.description, categoryIndex)
+    proteinByCategory.set(category, (proteinByCategory.get(category) ?? 0) + food.protein)
+  }
+  // Canonical order first, then any library categories outside the canonical set.
+  const categories: string[] = [...PROTEIN_SOURCE_CATEGORIES]
+  for (const category of proteinByCategory.keys()) {
+    if (!categories.includes(category)) categories.push(category)
+  }
+  const total = [...proteinByCategory.values()].reduce((sum, protein) => sum + protein, 0)
+  return categories.map((category) => {
+    const protein = roundMacro(proteinByCategory.get(category) ?? 0)
+    return {
+      category,
+      protein,
+      share: total === 0 ? 0 : Math.round((protein / total) * 100),
+    }
+  })
 }

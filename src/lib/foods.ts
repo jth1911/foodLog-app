@@ -76,6 +76,68 @@ export type UserFoodReference = {
   fiber?: number
 }
 
+// Unit/descriptor words that don't identify a food, dropped from tokens so a
+// library name keys on what matters — "Greek yogurt (non fat, plain)" → greek,
+// yogurt; "Chicken Breast (skinless)" → chicken, breast.
+const FOOD_NAME_STOPWORDS = new Set([
+  'low', 'fat', 'non', 'nonfat', 'plain', 'skinless', 'boneless', 'lean', 'dry',
+  'cooked', 'uncooked', 'canned', 'drained', 'green', 'oil', 'shelled', 'light',
+  'of', 'in', 'the', 'and', 'with', 'sliced', 'deli', 'firm', 'raw', 'whole',
+  'organic', 'grass', 'fed',
+])
+
+/**
+ * Significant lower-cased tokens of a food name, for forgiving matching: drop
+ * parentheticals and unit/descriptor stopwords, split on non-alphanumerics,
+ * crudely singularise (seeds → seed) and keep tokens of 3+ chars. So "Chia
+ * Seeds" → ["chia", "seed"], and a verbose entry like "Stonyfield Organic Greek
+ * Plain Nonfat Yogurt" shares ["greek", "yogurt"] with the library's "Greek
+ * yogurt (non fat, plain)". Word-boundary based, so "egg" never matches
+ * "eggplant".
+ */
+export function tokenizeFoodName(name: string): string[] {
+  return name
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, ' ')
+    .split(/[^a-z0-9]+/)
+    .filter(Boolean)
+    .map((word) => (word.endsWith('s') && word.length > 3 ? word.slice(0, -1) : word))
+    .filter((word) => word.length >= 3 && !FOOD_NAME_STOPWORDS.has(word))
+}
+
+// A searchable view of the live food library, keyed by food name → category.
+export type FoodCategoryIndex = {
+  // Normalised full name → category, for an exact, highest-confidence hit. When
+  // the same name appears in two categories the last one wins — a tolerated edge.
+  exact: Map<string, string>
+  // Per library food: its category and significant name tokens, for token-subset
+  // matching. Sorted most-specific (most tokens) first so a description that
+  // matches several foods resolves to the longest, most precise one.
+  tokenized: { category: string; tokens: string[] }[]
+}
+
+/**
+ * Index the live, user-managed library (not the static JSON, so foods the user
+ * added on the Foods page categorise too) for both exact and token matching —
+ * see resolveFoodGroup, which uses it to map a free-text entry description back
+ * to its food group.
+ */
+export function buildFoodCategoryIndex(
+  foods: Record<string, UserFoodReference[]>,
+): FoodCategoryIndex {
+  const exact = new Map<string, string>()
+  const tokenized: { category: string; tokens: string[] }[] = []
+  for (const [category, list] of Object.entries(foods)) {
+    for (const food of list) {
+      exact.set(food.food.trim().toLowerCase(), category)
+      const tokens = tokenizeFoodName(food.food)
+      if (tokens.length) tokenized.push({ category, tokens })
+    }
+  }
+  tokenized.sort((a, b) => b.tokens.length - a.tokens.length)
+  return { exact, tokenized }
+}
+
 /**
  * Build the first-run reference library from the static JSON: each food's mixed
  * macro strings are normalised to numbers and stamped with a stable id. Runs once
