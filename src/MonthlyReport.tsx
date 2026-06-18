@@ -69,9 +69,11 @@ function formatMonth(iso: string): string {
 }
 
 // Slice labels like "Protein 30%". Uses Recharts' own label props — `name` (our
-// macro label) and `percent` (the slice's 0–1 fraction).
+// `macro` nameKey, lower-cased, so it's mapped through MACRO_LABELS for display)
+// and `percent` (the slice's 0–1 fraction).
 function renderSliceLabel(props: { name?: string; percent?: number }): string {
-  return `${props.name} ${Math.round((props.percent ?? 0) * 100)}%`
+  const label = MACRO_LABELS[props.name as 'protein' | 'carbs' | 'fat'] ?? props.name
+  return `${label} ${Math.round((props.percent ?? 0) * 100)}%`
 }
 
 type MonthlyReportProps = {
