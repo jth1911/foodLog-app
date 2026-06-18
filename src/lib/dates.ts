@@ -55,6 +55,43 @@ export function weekdayOf(iso: string): string {
 }
 
 /**
+ * The first day of the month containing `iso`, as an ISO `YYYY-MM-01` string.
+ * Pure string slice — the day part is irrelevant, so no Date math is needed.
+ */
+export function startOfMonth(iso: string): string {
+  return `${iso.slice(0, 7)}-01`
+}
+
+/**
+ * First-of-month `n` months from the month containing `iso` (negative goes
+ * backward). Always returns a `YYYY-MM-01` date, normalising year boundaries via
+ * `Date.UTC` so December→January and month-length differences are handled — you
+ * never land on an invalid day because the day is pinned to the 1st.
+ */
+export function addMonths(iso: string, n: number): string {
+  const [year, month] = iso.split('-').map(Number)
+  const dt = new Date(Date.UTC(year, month - 1 + n, 1))
+  return dt.toISOString().slice(0, 10)
+}
+
+/**
+ * Every ISO date in the month containing `iso`, ascending (the 1st through the
+ * last day). Length varies with the month — 28/29/30/31 — and leap Februaries
+ * resolve correctly because the loop stops as soon as `Date.UTC` rolls into the
+ * next month.
+ */
+export function monthDays(iso: string): string[] {
+  const [year, month] = iso.split('-').map(Number)
+  const days: string[] = []
+  for (let day = 1; ; day++) {
+    const dt = new Date(Date.UTC(year, month - 1, day))
+    if (dt.getUTCMonth() !== month - 1) break
+    days.push(dt.toISOString().slice(0, 10))
+  }
+  return days
+}
+
+/**
  * ISO-8601 week number (1–53) for an ISO date. Week 1 is the week containing
  * the year's first Thursday; weeks start on Monday. All math runs in UTC.
  */

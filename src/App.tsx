@@ -3,17 +3,19 @@ import { DashboardView } from './Dashboard'
 import FoodsPage from './FoodsPage'
 import GoalsPage from './GoalsPage'
 import WeeklyReport from './WeeklyReport'
+import MonthlyReport from './MonthlyReport'
 import { useFoodLog } from './useFoodLog'
 import { type NewFoodInput } from './AddFoodModal'
 import LogViewer from './LogViewer'
 
-type Tab = 'dashboard' | 'foods' | 'goals' | 'weekly'
+type Tab = 'dashboard' | 'foods' | 'goals' | 'weekly' | 'monthly'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'foods', label: 'Foods' },
   { id: 'goals', label: 'Goals' },
   { id: 'weekly', label: 'Weekly' },
+  { id: 'monthly', label: 'Monthly' },
 ]
 
 function App() {
@@ -100,6 +102,9 @@ function App() {
           goalHistory={foodLog.goalHistory}
           foods={foodLog.foods}
         />
+      </div>
+      <div hidden={activeTab !== 'monthly'}>
+        <MonthlyReport loggedFoods={foodLog.entries} goalHistory={foodLog.goalHistory} />
       </div>
 
       {/* Always-visible floating launcher for the persisted event log. */}
