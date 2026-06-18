@@ -1,4 +1,4 @@
-import { useState, type FormEvent } from 'react'
+import { useRef, useState, type FormEvent } from 'react'
 import { type UserFoodReference } from './lib/foods'
 import { type NewFoodInput } from './AddFoodModal'
 import { estimateMacros, isGeminiConfigured, mergeEmptyMacros } from './lib/gemini'
@@ -109,6 +109,10 @@ function FoodsPage({
   const geminiReady = isGeminiConfigured()
   const [autofilling, setAutofilling] = useState(false)
   const [autofillError, setAutofillError] = useState<string | null>(null)
+  // The add/edit form lives in the side column, below the list on mobile; on
+  // edit we scroll it into view and focus the name so the change is visible.
+  const formSectionRef = useRef<HTMLElement>(null)
+  const nameInputRef = useRef<HTMLInputElement>(null)
 
   // The category in effect for the form: the locked one when editing, else the
   // chosen target, falling back to the first category.
@@ -152,6 +156,15 @@ function FoodsPage({
     setEditing({ category, id: food.id })
     setForm(formFrom(food))
     setFoodError(null)
+    // Bring the populated form into view and focus the name — otherwise the
+    // edit can happen entirely off-screen and look like nothing happened.
+    formSectionRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+    nameInputRef.current?.focus()
+  }
+
+  // Ask before removing so an accidental tap doesn't drop a food.
+  const confirmDeleteFood = (category: string, food: UserFoodReference) => {
+    if (window.confirm(`Delete "${food.food}"?`)) deleteFood(category, food.id)
   }
 
   const handleFoodSubmit = (e: FormEvent<HTMLFormElement>) => {
@@ -281,7 +294,7 @@ function FoodsPage({
                       <button
                         type="button"
                         aria-label={`Delete ${food.food}`}
-                        onClick={() => deleteFood(category, food.id)}
+                        onClick={() => confirmDeleteFood(category, food)}
                         className="shrink-0 rounded px-2 py-1 text-slate-400 hover:bg-rose-50 hover:text-rose-600 focus:outline-none"
                       >
                         ✕
@@ -297,6 +310,7 @@ function FoodsPage({
         <aside className="space-y-6 lg:w-72">
           {/* Add / edit food */}
           <section
+            ref={formSectionRef}
             aria-label={editing ? 'Edit food' : 'Add food'}
             className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm"
           >
@@ -332,6 +346,7 @@ function FoodsPage({
               <label className="block text-sm">
                 <span className="mb-1 block font-medium text-slate-600">Food name</span>
                 <input
+                  ref={nameInputRef}
                   type="text"
                   aria-label="New food name"
                   value={form.food}
