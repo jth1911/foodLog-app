@@ -2,16 +2,18 @@ import { useState } from 'react'
 import { DashboardView } from './Dashboard'
 import FoodsPage from './FoodsPage'
 import GoalsPage from './GoalsPage'
+import WeeklyReport from './WeeklyReport'
 import { useFoodLog } from './useFoodLog'
 import { type NewFoodInput } from './AddFoodModal'
 import LogViewer from './LogViewer'
 
-type Tab = 'dashboard' | 'foods' | 'goals'
+type Tab = 'dashboard' | 'foods' | 'goals' | 'weekly'
 
 const TABS: { id: Tab; label: string }[] = [
   { id: 'dashboard', label: 'Dashboard' },
   { id: 'foods', label: 'Foods' },
   { id: 'goals', label: 'Goals' },
+  { id: 'weekly', label: 'Weekly' },
 ]
 
 function App() {
@@ -91,6 +93,9 @@ function App() {
           onAdd={foodLog.addGoalChange}
           onDelete={foodLog.deleteGoalChange}
         />
+      </div>
+      <div hidden={activeTab !== 'weekly'}>
+        <WeeklyReport loggedFoods={foodLog.entries} goalHistory={foodLog.goalHistory} />
       </div>
 
       {/* Always-visible floating launcher for the persisted event log. */}

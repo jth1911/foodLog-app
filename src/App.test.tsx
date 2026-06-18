@@ -39,6 +39,17 @@ describe('App tab navigation', () => {
     expect(screen.getByText('Initial goal')).toBeInTheDocument()
   })
 
+  it('switches to the Weekly report when the Weekly tab is clicked', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    await user.click(screen.getByRole('tab', { name: 'Weekly' }))
+
+    expect(screen.getByRole('tab', { name: 'Weekly' })).toHaveAttribute('aria-selected', 'true')
+    expect(screen.getByRole('heading', { name: 'Weekly report' })).toBeInTheDocument()
+    expect(screen.getByRole('region', { name: 'Protein streak' })).toBeInTheDocument()
+  })
+
   it('reflects a goal change made on the Goals tab in the dashboard summary', async () => {
     const user = userEvent.setup()
     render(<App />)
