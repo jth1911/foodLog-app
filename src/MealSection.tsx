@@ -4,10 +4,11 @@ type MealSectionProps = {
   meal: MealType
   entries: FoodEntry[]
   onDelete: (id: string) => void
+  onEdit: (entry: FoodEntry) => void
 }
 
 /** One meal bucket: heading, then either an empty state or a row per entry. */
-function MealSection({ meal, entries, onDelete }: MealSectionProps) {
+function MealSection({ meal, entries, onDelete, onEdit }: MealSectionProps) {
   // Ask before removing so an accidental tap doesn't drop an entry.
   const confirmDelete = (entry: FoodEntry) => {
     if (window.confirm(`Delete "${entry.description}"?`)) onDelete(entry.id)
@@ -37,6 +38,14 @@ function MealSection({ meal, entries, onDelete }: MealSectionProps) {
                 <span>F {item.fat}</span>
                 <span>C {item.carbs}</span>
                 <span>Fb {item.fiber}</span>
+                <button
+                  type="button"
+                  aria-label={`Edit ${item.description}`}
+                  onClick={() => onEdit(item)}
+                  className="rounded px-1 text-slate-400 hover:bg-slate-100 hover:text-slate-700 focus:outline-none"
+                >
+                  ✎
+                </button>
                 <button
                   type="button"
                   aria-label={`Delete ${item.description}`}

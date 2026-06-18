@@ -201,6 +201,65 @@ describe('AddFoodModal', () => {
     })
   })
 
+  describe('edit mode', () => {
+    const entryValues = {
+      description: 'Greek yogurt',
+      mealType: 'Breakfast' as const,
+      calories: 320,
+      protein: 22,
+      fat: 9,
+      carbs: 34,
+      fiber: 5,
+    }
+
+    it('shows an Edit title and a Save button, pre-filling every macro', () => {
+      render(<AddFoodModal onAdd={() => {}} onClose={() => {}} editing initialValues={entryValues} />)
+      expect(screen.getByRole('dialog', { name: 'Edit food' })).toBeInTheDocument()
+      expect(screen.getByRole('button', { name: 'Save' })).toBeInTheDocument()
+      expect(screen.queryByRole('button', { name: 'Add' })).not.toBeInTheDocument()
+      expect(screen.getByLabelText('Food name')).toHaveValue('Greek yogurt')
+      expect(screen.getByLabelText('Calories')).toHaveValue(320)
+      expect(screen.getByLabelText('Fat')).toHaveValue(9)
+      expect(screen.getByLabelText('Fiber')).toHaveValue(5)
+    })
+
+    it('shows no quantity UI even when a serving size is present', () => {
+      render(
+        <AddFoodModal
+          onAdd={() => {}}
+          onClose={() => {}}
+          editing
+          initialValues={{ ...entryValues, servingSize: '1 large', quantity: 2 }}
+        />,
+      )
+      expect(screen.queryByLabelText('Quantity')).not.toBeInTheDocument()
+      expect(screen.queryByLabelText('Serving size')).not.toBeInTheDocument()
+    })
+
+    it('submits the edited macros as final totals (no serving/quantity)', async () => {
+      const onAdd = vi.fn()
+      const onClose = vi.fn()
+      const user = userEvent.setup()
+      render(
+        <AddFoodModal onAdd={onAdd} onClose={onClose} editing initialValues={entryValues} />,
+      )
+
+      fireEvent.change(screen.getByLabelText('Protein'), { target: { value: '30' } })
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+
+      expect(onAdd).toHaveBeenCalledWith({
+        description: 'Greek yogurt',
+        mealType: 'Breakfast',
+        calories: 320,
+        protein: 30,
+        fat: 9,
+        carbs: 34,
+        fiber: 5,
+      })
+      expect(onClose).toHaveBeenCalledTimes(1)
+    })
+  })
+
   it('cancels without adding', async () => {
     const onAdd = vi.fn()
     const onClose = vi.fn()

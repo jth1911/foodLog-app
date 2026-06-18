@@ -19,7 +19,7 @@ const make = (over: Partial<FoodEntry>): FoodEntry => ({
 
 describe('MealFeed', () => {
   it('renders all four meal sections in order within the Food log region', () => {
-    render(<MealFeed loggedFoods={[]} onDelete={() => {}} />)
+    render(<MealFeed loggedFoods={[]} onDelete={() => {}} onEdit={() => {}} />)
     const region = screen.getByRole('region', { name: 'Food log' })
     const headings = within(region)
       .getAllByRole('heading', { level: 3 })
@@ -32,13 +32,13 @@ describe('MealFeed', () => {
       make({ id: '1', mealType: 'Lunch', description: 'Chicken salad' }),
       make({ id: '2', mealType: 'Snacks', description: 'Almonds' }),
     ]
-    render(<MealFeed loggedFoods={foods} onDelete={() => {}} />)
+    render(<MealFeed loggedFoods={foods} onDelete={() => {}} onEdit={() => {}} />)
     expect(screen.getByText('Chicken salad')).toBeInTheDocument()
     expect(screen.getByText('Almonds')).toBeInTheDocument()
   })
 
   it('shows empty placeholders for meals with no entries', () => {
-    render(<MealFeed loggedFoods={[make({ mealType: 'Breakfast' })]} onDelete={() => {}} />)
+    render(<MealFeed loggedFoods={[make({ mealType: 'Breakfast' })]} onDelete={() => {}} onEdit={() => {}} />)
     expect(screen.getByText('No food logged for lunch yet.')).toBeInTheDocument()
     expect(screen.getByText('No food logged for dinner yet.')).toBeInTheDocument()
     expect(screen.getByText('No food logged for snacks yet.')).toBeInTheDocument()

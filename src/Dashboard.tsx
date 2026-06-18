@@ -51,6 +51,7 @@ type DashboardViewProps = DashboardProps & {
   loggedFoods: FoodEntry[]
   goalHistory: GoalChange[]
   addEntry: (entry: FoodEntry) => void
+  updateEntry: (entry: FoodEntry) => void
   deleteEntry: (id: string) => void
 }
 
@@ -66,10 +67,13 @@ export function DashboardView({
   loggedFoods,
   goalHistory,
   addEntry,
+  updateEntry,
   deleteEntry,
 }: DashboardViewProps) {
   const [selectedDate, setSelectedDate] = useState(today)
   const [isFabOpen, setIsFabOpen] = useState(false)
+  // The entry currently being edited, if any. Opens the modal in edit mode.
+  const [editingEntry, setEditingEntry] = useState<FoodEntry | null>(null)
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
   const calendarRef = useRef<HTMLDivElement>(null)
 
@@ -83,13 +87,14 @@ export function DashboardView({
     return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [isCalendarOpen])
 
-  // The modal is open when opened via the FAB or when a pre-fill is pending
-  // (e.g. a food was picked on the Foods page) — no effect needed to sync state.
-  const isModalOpen = isFabOpen || prefill != null
+  // The modal is open when opened via the FAB, when a pre-fill is pending (e.g.
+  // a food was picked on the Foods page), or when an entry is being edited.
+  const isModalOpen = isFabOpen || prefill != null || editingEntry != null
 
-  // Closing always clears any pending pre-fill so the FAB next opens blank.
+  // Closing always clears any pending pre-fill/edit so the FAB next opens blank.
   const closeModal = () => {
     setIsFabOpen(false)
+    setEditingEntry(null)
     onPrefillConsumed?.()
   }
 
@@ -124,6 +129,32 @@ export function DashboardView({
 
   const deleteFood = (id: string) => {
     deleteEntry(id)
+  }
+
+  // Map an existing entry onto the modal's input shape so it opens pre-filled.
+  // Serving/quantity are intentionally omitted — editing treats macros as final.
+  const editToInput = (entry: FoodEntry): Partial<NewFoodInput> => ({
+    description: entry.description,
+    mealType: entry.mealType,
+    calories: entry.calories,
+    protein: entry.protein,
+    fat: entry.fat,
+    carbs: entry.carbs,
+    fiber: entry.fiber,
+  })
+
+  // Save an edit in place: keep id/date/week/weekday, apply the edited fields,
+  // and drop any serving/quantity label, since hand-edited totals no longer
+  // correspond to the original serving math.
+  const saveEdit = (input: NewFoodInput) => {
+    if (!editingEntry) return
+    updateEntry({
+      id: editingEntry.id,
+      date: editingEntry.date,
+      week: editingEntry.week,
+      weekday: editingEntry.weekday,
+      ...input,
+    })
   }
 
   return (
@@ -229,7 +260,7 @@ export function DashboardView({
             </section>
 
             {/* Food log grouped by meal, filtered to the selected date */}
-            <MealFeed loggedFoods={foodsForDate} onDelete={deleteFood} />
+            <MealFeed loggedFoods={foodsForDate} onDelete={deleteFood} onEdit={setEditingEntry} />
           </main>
         </div>
       </div>
@@ -244,9 +275,17 @@ export function DashboardView({
         +
       </button>
 
-      {isModalOpen && (
-        <AddFoodModal onAdd={addFood} onClose={closeModal} initialValues={prefill ?? undefined} />
-      )}
+      {isModalOpen &&
+        (editingEntry ? (
+          <AddFoodModal
+            onAdd={saveEdit}
+            onClose={closeModal}
+            initialValues={editToInput(editingEntry)}
+            editing
+          />
+        ) : (
+          <AddFoodModal onAdd={addFood} onClose={closeModal} initialValues={prefill ?? undefined} />
+        ))}
     </div>
   )
 }
@@ -258,13 +297,14 @@ export function DashboardView({
  * dashboard on its own (and in its tests).
  */
 function Dashboard(props: DashboardProps = {}) {
-  const { entries, goalHistory, addEntry, deleteEntry } = useFoodLog()
+  const { entries, goalHistory, addEntry, updateEntry, deleteEntry } = useFoodLog()
   return (
     <DashboardView
       {...props}
       loggedFoods={entries}
       goalHistory={goalHistory}
       addEntry={addEntry}
+      updateEntry={updateEntry}
       deleteEntry={deleteEntry}
     />
   )
