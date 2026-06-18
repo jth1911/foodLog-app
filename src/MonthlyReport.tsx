@@ -220,17 +220,17 @@ function MonthlyReport({ loggedFoods, goalHistory, today = todayIso() }: Monthly
             Protein / carbs / fat split across the month.
           </p>
           {hasMacros ? (
-            <div className="h-64 w-full">
+            <div className="h-80 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
+                <PieChart margin={{ top: 20, right: 10, bottom: 5, left: 10 }}>
                   <Pie
                     data={visibleMacros}
                     dataKey="grams"
                     nameKey="macro"
                     cx="50%"
                     cy="50%"
-                    innerRadius={55}
-                    outerRadius={90}
+                    innerRadius={48}
+                    outerRadius={78}
                     label={renderSliceLabel}
                   >
                     {visibleMacros.map((slice) => (
