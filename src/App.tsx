@@ -95,7 +95,11 @@ function App() {
         />
       </div>
       <div hidden={activeTab !== 'weekly'}>
-        <WeeklyReport loggedFoods={foodLog.entries} goalHistory={foodLog.goalHistory} />
+        <WeeklyReport
+          loggedFoods={foodLog.entries}
+          goalHistory={foodLog.goalHistory}
+          foods={foodLog.foods}
+        />
       </div>
 
       {/* Always-visible floating launcher for the persisted event log. */}

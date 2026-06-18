@@ -5,6 +5,7 @@ import {
   proteinStreak,
   fiberSeries,
   mealCalorieBreakdown,
+  proteinByFoodGroup,
 } from './weekly'
 import { GOALS_EPOCH, type FoodEntry, type GoalChange } from './nutrition'
 import { isoWeekOf, weekdayOf } from './dates'
@@ -194,5 +195,62 @@ describe('mealCalorieBreakdown', () => {
     const breakdown = mealCalorieBreakdown([], dates)
     expect(breakdown).toHaveLength(4)
     expect(breakdown.every((b) => b.calories === 0 && b.share === 0)).toBe(true)
+  })
+})
+
+describe('proteinByFoodGroup', () => {
+  const dates = weekWindow('2026-06-17')
+  const index = new Map<string, string>([
+    ['chicken breast', 'Meat/Poultry'],
+    ['greek yogurt', 'Dairy/Eggs'],
+    ['lentils', 'Legumes'],
+  ])
+
+  it('sums protein per food group across the window with percentages', () => {
+    const entries = [
+      entry({ date: '2026-06-17', description: 'Chicken breast', protein: 30 }),
+      entry({ date: '2026-06-16', description: 'Chicken breast', protein: 18 }),
+      entry({ date: '2026-06-15', description: 'Greek yogurt', protein: 16 }),
+      entry({ date: '2026-06-14', description: 'Lentils', protein: 36 }),
+    ]
+    const breakdown = proteinByFoodGroup(entries, dates, index)
+    const byCategory = Object.fromEntries(breakdown.map((b) => [b.category, b]))
+    expect(byCategory['Meat/Poultry'].protein).toBe(48)
+    expect(byCategory['Meat/Poultry'].share).toBe(48) // 48 / 100
+    expect(byCategory['Dairy/Eggs'].share).toBe(16)
+    expect(byCategory['Legumes'].share).toBe(36)
+    expect(byCategory['Seafood'].protein).toBe(0)
+  })
+
+  it('matches descriptions case- and whitespace-insensitively', () => {
+    const entries = [entry({ date: '2026-06-17', description: '  CHICKEN Breast ', protein: 25 })]
+    const byCategory = Object.fromEntries(
+      proteinByFoodGroup(entries, dates, index).map((b) => [b.category, b]),
+    )
+    expect(byCategory['Meat/Poultry'].protein).toBe(25)
+  })
+
+  it('routes unmatched descriptions to Other', () => {
+    const entries = [entry({ date: '2026-06-17', description: 'Mystery shake', protein: 20 })]
+    const byCategory = Object.fromEntries(
+      proteinByFoodGroup(entries, dates, index).map((b) => [b.category, b]),
+    )
+    expect(byCategory['Other'].protein).toBe(20)
+    expect(byCategory['Other'].share).toBe(100)
+  })
+
+  it('ignores entries outside the window', () => {
+    const entries = [entry({ date: '2026-06-09', description: 'Chicken breast', protein: 99 })]
+    const byCategory = Object.fromEntries(
+      proteinByFoodGroup(entries, dates, index).map((b) => [b.category, b]),
+    )
+    expect(byCategory['Meat/Poultry'].protein).toBe(0)
+  })
+
+  it('returns the canonical categories at 0g with no protein logged', () => {
+    const breakdown = proteinByFoodGroup([], dates, index)
+    expect(breakdown).toHaveLength(8)
+    expect(breakdown.every((b) => b.protein === 0 && b.share === 0)).toBe(true)
+    expect(breakdown.map((b) => b.category)).toContain('Other')
   })
 })

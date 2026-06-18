@@ -13,6 +13,7 @@ import {
   type MealType,
 } from './nutrition'
 import { addDays, weekdayOf } from './dates'
+import { roundMacro } from './foods'
 
 /**
  * The `days` ISO dates ending at (and including) `endDate`, ascending. Defaults
@@ -143,4 +144,66 @@ export function mealCalorieBreakdown(entries: FoodEntry[], dates: string[]): Mea
     calories: caloriesByMeal[mealType],
     share: total === 0 ? 0 : Math.round((caloriesByMeal[mealType] / total) * 100),
   }))
+}
+
+// Canonical food-group categories, in the order the pie's legend lists them.
+// Mirrors the keys of proteinSources.json plus the catch-all "Other"; the
+// breakdown always emits these (even at 0g) so colours and legend stay stable.
+export const PROTEIN_SOURCE_CATEGORIES = [
+  'Dairy/Eggs',
+  'Meat/Poultry',
+  'Seafood',
+  'Vegetables',
+  'Legumes',
+  'Whole Grains',
+  'Nuts/Seeds',
+  'Other',
+] as const
+
+export type ProteinSourceSlice = {
+  category: string
+  protein: number
+  // Share of the window's total protein, rounded to a whole percent (0 when no
+  // protein at all). Named `share` (not `percent`) for the same reason as
+  // MealSlice — so it can't shadow Recharts' computed `percent` in a pie label.
+  share: number
+}
+
+/**
+ * Total protein per food-group category across the window, with each category's
+ * share of the total as a whole-number percent. Mirrors mealCalorieBreakdown.
+ *
+ * `FoodEntry.description` carries no category, so each entry's description is
+ * matched (trimmed, case-insensitive) against `categoryIndex` — the live food
+ * library keyed by name (see buildFoodCategoryIndex). Entries with no match fall
+ * into "Other". Always returns the canonical categories (plus any extra ones the
+ * library introduced, appended) so total protein is conserved and the legend is
+ * stable even when a category is empty.
+ */
+export function proteinByFoodGroup(
+  entries: FoodEntry[],
+  dates: string[],
+  categoryIndex: Map<string, string>,
+): ProteinSourceSlice[] {
+  const inWindow = new Set(dates)
+  const proteinByCategory = new Map<string, number>()
+  for (const food of entries) {
+    if (!inWindow.has(food.date)) continue
+    const category = categoryIndex.get(food.description.trim().toLowerCase()) ?? 'Other'
+    proteinByCategory.set(category, (proteinByCategory.get(category) ?? 0) + food.protein)
+  }
+  // Canonical order first, then any library categories outside the canonical set.
+  const categories: string[] = [...PROTEIN_SOURCE_CATEGORIES]
+  for (const category of proteinByCategory.keys()) {
+    if (!categories.includes(category)) categories.push(category)
+  }
+  const total = [...proteinByCategory.values()].reduce((sum, protein) => sum + protein, 0)
+  return categories.map((category) => {
+    const protein = roundMacro(proteinByCategory.get(category) ?? 0)
+    return {
+      category,
+      protein,
+      share: total === 0 ? 0 : Math.round((protein / total) * 100),
+    }
+  })
 }

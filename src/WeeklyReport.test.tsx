@@ -3,6 +3,7 @@ import { render, screen } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import WeeklyReport from './WeeklyReport'
 import { GOALS_EPOCH, type FoodEntry, type GoalChange } from './lib/nutrition'
+import { type UserFoodReference } from './lib/foods'
 import { isoWeekOf, weekdayOf } from './lib/dates'
 
 // Recharts' ResponsiveContainer measures DOM size, which is 0 in jsdom, so the
@@ -62,6 +63,27 @@ const goals: GoalChange[] = [
   },
 ]
 
+const refFood = (food: string): UserFoodReference => ({
+  id: food,
+  food,
+  serving_size: '1',
+  protein: 0,
+  carbs: 0,
+  calories: 0,
+})
+
+// A minimal library so logged descriptions resolve to a food group.
+const library: Record<string, UserFoodReference[]> = {
+  'Meat/Poultry': [refFood('Chicken breast')],
+  'Dairy/Eggs': [refFood('Greek yogurt')],
+}
+
+// The chart-data the mocked Pie inside a named region was handed.
+function pieDataIn(regionName: string): unknown[] {
+  const region = screen.getByRole('region', { name: regionName })
+  return JSON.parse(region.querySelector('[data-testid="chart-data"]')!.textContent!)
+}
+
 describe('WeeklyReport', () => {
   it('renders all four insight sections', () => {
     render(<WeeklyReport loggedFoods={[]} goalHistory={goals} today={TODAY} />)
@@ -113,5 +135,33 @@ describe('WeeklyReport', () => {
 
     await user.click(screen.getByRole('button', { name: 'Previous week' }))
     expect(streak).toHaveTextContent('1 / 7') // last week: the 2026-06-10 hit
+  })
+
+  it('renders the protein-source breakdown section', () => {
+    render(<WeeklyReport loggedFoods={[]} goalHistory={goals} today={TODAY} />)
+    expect(screen.getByRole('region', { name: 'Protein sources' })).toBeInTheDocument()
+  })
+
+  it('shows an empty state for the protein pie when no protein is logged', () => {
+    render(<WeeklyReport loggedFoods={[]} goalHistory={goals} today={TODAY} />)
+    expect(screen.getByText('No protein logged this week.')).toBeInTheDocument()
+  })
+
+  it('feeds the protein pie its visible food-group slices from the library', () => {
+    const entries = [
+      entry({ date: TODAY, description: 'Chicken breast', protein: 30 }),
+      entry({ date: '2026-06-16', description: 'Greek yogurt', protein: 10 }),
+      entry({ date: '2026-06-15', description: 'Mystery bar', protein: 10 }), // → Other
+    ]
+    render(
+      <WeeklyReport loggedFoods={entries} goalHistory={goals} foods={library} today={TODAY} />,
+    )
+    const data = pieDataIn('Protein sources') as Array<{ category: string; protein: number }>
+    const byCategory = Object.fromEntries(data.map((d) => [d.category, d.protein]))
+    expect(byCategory['Meat/Poultry']).toBe(30)
+    expect(byCategory['Dairy/Eggs']).toBe(10)
+    expect(byCategory['Other']).toBe(10)
+    // Empty groups are filtered out of the pie's data.
+    expect(byCategory['Seafood']).toBeUndefined()
   })
 })

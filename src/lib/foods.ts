@@ -77,6 +77,25 @@ export type UserFoodReference = {
 }
 
 /**
+ * Index every reference food by its (trimmed, lower-cased) name → category, so a
+ * free-text log entry's `description` can be looked up to the food group it came
+ * from. Built from the live, user-managed library (not the static JSON) so foods
+ * the user added on the Foods page categorise too. When the same name appears in
+ * two categories the last one wins — a rare edge the protein breakdown tolerates.
+ */
+export function buildFoodCategoryIndex(
+  foods: Record<string, UserFoodReference[]>,
+): Map<string, string> {
+  const index = new Map<string, string>()
+  for (const [category, list] of Object.entries(foods)) {
+    for (const food of list) {
+      index.set(food.food.trim().toLowerCase(), category)
+    }
+  }
+  return index
+}
+
+/**
  * Build the first-run reference library from the static JSON: each food's mixed
  * macro strings are normalised to numbers and stamped with a stable id. Runs once
  * to seed localStorage (see useFoodLog); thereafter the stored copy is the source
