@@ -93,6 +93,8 @@ export type FoodLog = {
   // store guarantees at least one entry, so every date resolves to a goal.
   goalHistory: GoalChange[]
   addEntry: (entry: FoodEntry) => void
+  // Replace an existing entry in place, matched by id (other entries untouched).
+  updateEntry: (updated: FoodEntry) => void
   deleteEntry: (id: string) => void
   // Append (or, for an existing effective date, replace) a goal change.
   addGoalChange: (effectiveDate: string, goals: Goals) => void
@@ -142,6 +144,10 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
     setEntries((prev) => [...prev, entry])
   }, [])
 
+  const updateEntry = useCallback((updated: FoodEntry) => {
+    setEntries((prev) => prev.map((f) => (f.id === updated.id ? updated : f)))
+  }, [])
+
   const deleteEntry = useCallback((id: string) => {
     setEntries((prev) => prev.filter((f) => f.id !== id))
   }, [])
@@ -164,5 +170,5 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
     )
   }, [])
 
-  return { entries, goalHistory, addEntry, deleteEntry, addGoalChange, deleteGoalChange }
+  return { entries, goalHistory, addEntry, updateEntry, deleteEntry, addGoalChange, deleteGoalChange }
 }
