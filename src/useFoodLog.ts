@@ -98,6 +98,8 @@ export type FoodLog = {
   // JSON on first load, then the sole source of truth.
   foods: Record<string, UserFoodReference[]>
   addEntry: (entry: FoodEntry) => void
+  // Append a batch of entries in one update, e.g. a CSV bulk import.
+  addEntries: (entries: FoodEntry[]) => void
   // Replace an existing entry in place, matched by id (other entries untouched).
   updateEntry: (updated: FoodEntry) => void
   deleteEntry: (id: string) => void
@@ -161,6 +163,12 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   const addEntry = useCallback((entry: FoodEntry) => {
     log('info', 'Entry added', { description: entry.description, date: entry.date })
     setEntries((prev) => [...prev, entry])
+  }, [])
+
+  const addEntries = useCallback((toAdd: FoodEntry[]) => {
+    if (toAdd.length === 0) return
+    log('info', 'Entries imported', { count: toAdd.length })
+    setEntries((prev) => [...prev, ...toAdd])
   }, [])
 
   const updateEntry = useCallback((updated: FoodEntry) => {
@@ -236,6 +244,7 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
     goalHistory,
     foods,
     addEntry,
+    addEntries,
     updateEntry,
     deleteEntry,
     addGoalChange,

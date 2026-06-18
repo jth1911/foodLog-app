@@ -13,6 +13,7 @@ import {
 } from './lib/nutrition'
 import MealFeed from './MealFeed'
 import AddFoodModal, { type NewFoodInput } from './AddFoodModal'
+import BulkImportModal from './BulkImportModal'
 import { addDays, dateToIso, isoToDate, isoWeekOf, todayIso, weekdayOf } from './lib/dates'
 import { useFoodLog } from './useFoodLog'
 
@@ -51,6 +52,7 @@ type DashboardViewProps = DashboardProps & {
   loggedFoods: FoodEntry[]
   goalHistory: GoalChange[]
   addEntry: (entry: FoodEntry) => void
+  addEntries: (entries: FoodEntry[]) => void
   updateEntry: (entry: FoodEntry) => void
   deleteEntry: (id: string) => void
 }
@@ -67,11 +69,13 @@ export function DashboardView({
   loggedFoods,
   goalHistory,
   addEntry,
+  addEntries,
   updateEntry,
   deleteEntry,
 }: DashboardViewProps) {
   const [selectedDate, setSelectedDate] = useState(today)
   const [isFabOpen, setIsFabOpen] = useState(false)
+  const [isImportOpen, setIsImportOpen] = useState(false)
   // The entry currently being edited, if any. Opens the modal in edit mode.
   const [editingEntry, setEditingEntry] = useState<FoodEntry | null>(null)
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
@@ -129,6 +133,14 @@ export function DashboardView({
 
   const deleteFood = (id: string) => {
     deleteEntry(id)
+  }
+
+  // Append the imported entries and jump to the first one's day so the result
+  // is immediately visible.
+  const handleImport = (entries: FoodEntry[]) => {
+    addEntries(entries)
+    if (entries.length > 0) setSelectedDate(entries[0].date)
+    setIsImportOpen(false)
   }
 
   // Map an existing entry onto the modal's input shape so it opens pre-filled.
@@ -265,15 +277,25 @@ export function DashboardView({
         </div>
       </div>
 
-      {/* Always-reachable trigger to log a new food on the selected day. */}
-      <button
-        type="button"
-        aria-label="Add food"
-        onClick={() => setIsFabOpen(true)}
-        className="fixed right-6 top-1/2 flex h-14 w-14 -translate-y-1/2 items-center justify-center rounded-full bg-slate-900 text-3xl leading-none text-white shadow-lg hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
-      >
-        +
-      </button>
+      {/* Always-reachable actions for the selected day, stacked at the right
+          edge (clear of the bottom-corner event-log button). */}
+      <div className="fixed right-6 top-1/2 flex -translate-y-1/2 flex-col items-center gap-3">
+        <button
+          type="button"
+          aria-label="Add food"
+          onClick={() => setIsFabOpen(true)}
+          className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-3xl leading-none text-white shadow-lg hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
+        >
+          +
+        </button>
+        <button
+          type="button"
+          onClick={() => setIsImportOpen(true)}
+          className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-md hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+        >
+          Import CSV
+        </button>
+      </div>
 
       {isModalOpen &&
         (editingEntry ? (
@@ -286,6 +308,10 @@ export function DashboardView({
         ) : (
           <AddFoodModal onAdd={addFood} onClose={closeModal} initialValues={prefill ?? undefined} />
         ))}
+
+      {isImportOpen && (
+        <BulkImportModal onImport={handleImport} onClose={() => setIsImportOpen(false)} />
+      )}
     </div>
   )
 }
@@ -297,13 +323,14 @@ export function DashboardView({
  * dashboard on its own (and in its tests).
  */
 function Dashboard(props: DashboardProps = {}) {
-  const { entries, goalHistory, addEntry, updateEntry, deleteEntry } = useFoodLog()
+  const { entries, goalHistory, addEntry, addEntries, updateEntry, deleteEntry } = useFoodLog()
   return (
     <DashboardView
       {...props}
       loggedFoods={entries}
       goalHistory={goalHistory}
       addEntry={addEntry}
+      addEntries={addEntries}
       updateEntry={updateEntry}
       deleteEntry={deleteEntry}
     />
