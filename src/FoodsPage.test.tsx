@@ -5,6 +5,17 @@ import userEvent from '@testing-library/user-event'
 import FoodsPage from './FoodsPage'
 import { type UserFoodReference } from './lib/foods'
 
+// The Gemini client is mocked: estimateMacros/isGeminiConfigured are controlled
+// per test, while the pure mergeEmptyMacros keeps its real (tested) behaviour.
+const { estimateMacros, isGeminiConfigured } = vi.hoisted(() => ({
+  estimateMacros: vi.fn(),
+  isGeminiConfigured: vi.fn(() => true),
+}))
+vi.mock('./lib/gemini', async () => {
+  const actual = await vi.importActual<typeof import('./lib/gemini')>('./lib/gemini')
+  return { ...actual, estimateMacros, isGeminiConfigured }
+})
+
 const foods: Record<string, UserFoodReference[]> = {
   'Dairy/Eggs': [
     { id: 'e1', food: 'Egg', serving_size: '1 large', protein: 6, carbs: 1, calories: 70 },
@@ -251,5 +262,66 @@ describe('FoodsPage', () => {
     vi.mocked(window.confirm).mockReturnValue(true)
     await user.click(screen.getByRole('button', { name: 'Delete category Dairy/Eggs' }))
     expect(deleteCategory).toHaveBeenCalledWith('Dairy/Eggs')
+  })
+
+  describe('auto-fill missing macros', () => {
+    const autofill = () => screen.getByRole('button', { name: /auto-fill missing macros/i })
+
+    afterEach(() => {
+      estimateMacros.mockReset()
+      isGeminiConfigured.mockReturnValue(true)
+    })
+
+    it('is hidden when no API key is configured', () => {
+      isGeminiConfigured.mockReturnValue(false)
+      renderPage()
+      expect(screen.queryByRole('button', { name: /auto-fill missing macros/i })).toBeNull()
+    })
+
+    it('is disabled until both food name and serving size are filled', async () => {
+      const user = userEvent.setup()
+      renderPage()
+      expect(autofill()).toBeDisabled()
+
+      await user.type(screen.getByLabelText('New food name'), 'Banana')
+      expect(autofill()).toBeDisabled()
+      await user.type(screen.getByLabelText('New food serving size'), '1 medium')
+      expect(autofill()).toBeEnabled()
+    })
+
+    it('fills only the empty macro fields, leaving entered values untouched', async () => {
+      estimateMacros.mockResolvedValue({ protein: 1.3, carbs: 27, calories: 105, fat: 0.4, fiber: 3 })
+      const user = userEvent.setup()
+      renderPage()
+
+      await user.type(screen.getByLabelText('New food name'), 'Banana')
+      await user.type(screen.getByLabelText('New food serving size'), '1 medium')
+      await user.type(screen.getByLabelText('New food protein'), '2') // user-entered: must be kept
+      await user.click(autofill())
+
+      expect(estimateMacros).toHaveBeenCalledWith({ food: 'Banana', serving_size: '1 medium' })
+      expect(await screen.findByLabelText('New food carbs')).toHaveValue(27)
+      expect(screen.getByLabelText('New food calories')).toHaveValue(105)
+      expect(screen.getByLabelText('New food fat')).toHaveValue(0.4)
+      expect(screen.getByLabelText('New food fiber')).toHaveValue(3)
+      expect(screen.getByLabelText('New food protein')).toHaveValue(2) // untouched
+    })
+
+    it('surfaces an error inline and leaves manual entry working', async () => {
+      estimateMacros.mockRejectedValue(new Error('quota exceeded'))
+      const user = userEvent.setup()
+      renderPage()
+
+      await user.type(screen.getByLabelText('New food name'), 'Banana')
+      await user.type(screen.getByLabelText('New food serving size'), '1 medium')
+      await user.click(autofill())
+
+      expect(await screen.findByRole('alert')).toHaveTextContent(/quota exceeded/i)
+      // Fields stay empty and editable.
+      const carbs = screen.getByLabelText('New food carbs')
+      expect(carbs).toHaveValue(null)
+      await user.type(carbs, '27')
+      expect(carbs).toHaveValue(27)
+    })
   })
 })
