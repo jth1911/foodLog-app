@@ -157,8 +157,37 @@ export const PROTEIN_SOURCE_CATEGORIES = [
   'Legumes',
   'Whole Grains',
   'Nuts/Seeds',
+  'Supplements',
   'Other',
 ] as const
+
+// Substrings that mark an entry as a protein supplement even when its description
+// doesn't match a library food by name — the bulk of "Other" tends to be these.
+// Kept specific (multi-word / unambiguous) so a normal food never trips them;
+// bare "protein" is deliberately excluded ("high-protein bread" is not a supp).
+const SUPPLEMENT_KEYWORDS = [
+  'protein powder',
+  'protein shake',
+  'protein isolate',
+  'whey',
+  'casein',
+  'mass gainer',
+]
+
+/**
+ * Resolve one entry's `description` to a food group. Exact match against the
+ * library index wins, *except* when it resolves to the catch-all "Other": a
+ * specific supplement keyword then upgrades it to "Supplements" (so a protein
+ * powder filed under "Other", or typed free-text, still lands there). An
+ * explicit non-"Other" category the user chose is always respected.
+ */
+export function resolveFoodGroup(description: string, categoryIndex: Map<string, string>): string {
+  const key = description.trim().toLowerCase()
+  const exact = categoryIndex.get(key)
+  if (exact && exact !== 'Other') return exact
+  if (SUPPLEMENT_KEYWORDS.some((keyword) => key.includes(keyword))) return 'Supplements'
+  return exact ?? 'Other'
+}
 
 export type ProteinSourceSlice = {
   category: string
@@ -174,11 +203,11 @@ export type ProteinSourceSlice = {
  * share of the total as a whole-number percent. Mirrors mealCalorieBreakdown.
  *
  * `FoodEntry.description` carries no category, so each entry's description is
- * matched (trimmed, case-insensitive) against `categoryIndex` — the live food
- * library keyed by name (see buildFoodCategoryIndex). Entries with no match fall
- * into "Other". Always returns the canonical categories (plus any extra ones the
- * library introduced, appended) so total protein is conserved and the legend is
- * stable even when a category is empty.
+ * matched against `categoryIndex` — the live food library keyed by name (see
+ * buildFoodCategoryIndex) — via resolveFoodGroup, which also keyword-classifies
+ * supplements and falls back to "Other". Always returns the canonical categories
+ * (plus any extra ones the library introduced, appended) so total protein is
+ * conserved and the legend is stable even when a category is empty.
  */
 export function proteinByFoodGroup(
   entries: FoodEntry[],
@@ -189,7 +218,7 @@ export function proteinByFoodGroup(
   const proteinByCategory = new Map<string, number>()
   for (const food of entries) {
     if (!inWindow.has(food.date)) continue
-    const category = categoryIndex.get(food.description.trim().toLowerCase()) ?? 'Other'
+    const category = resolveFoodGroup(food.description, categoryIndex)
     proteinByCategory.set(category, (proteinByCategory.get(category) ?? 0) + food.protein)
   }
   // Canonical order first, then any library categories outside the canonical set.

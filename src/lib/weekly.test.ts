@@ -6,6 +6,7 @@ import {
   fiberSeries,
   mealCalorieBreakdown,
   proteinByFoodGroup,
+  resolveFoodGroup,
 } from './weekly'
 import { GOALS_EPOCH, type FoodEntry, type GoalChange } from './nutrition'
 import { isoWeekOf, weekdayOf } from './dates'
@@ -249,8 +250,48 @@ describe('proteinByFoodGroup', () => {
 
   it('returns the canonical categories at 0g with no protein logged', () => {
     const breakdown = proteinByFoodGroup([], dates, index)
-    expect(breakdown).toHaveLength(8)
+    expect(breakdown).toHaveLength(9)
     expect(breakdown.every((b) => b.protein === 0 && b.share === 0)).toBe(true)
-    expect(breakdown.map((b) => b.category)).toContain('Other')
+    expect(breakdown.map((b) => b.category)).toEqual(
+      expect.arrayContaining(['Supplements', 'Other']),
+    )
+  })
+
+  it('keyword-classifies supplements logged as free text', () => {
+    const entries = [entry({ date: '2026-06-17', description: 'Morning whey shake', protein: 25 })]
+    const byCategory = Object.fromEntries(
+      proteinByFoodGroup(entries, dates, index).map((b) => [b.category, b]),
+    )
+    expect(byCategory['Supplements'].protein).toBe(25)
+    expect(byCategory['Other'].protein).toBe(0)
+  })
+})
+
+describe('resolveFoodGroup', () => {
+  const index = new Map<string, string>([
+    ['chicken breast', 'Meat/Poultry'],
+    ['my whey scoop', 'Other'], // a library food the user filed under Other
+    ['greek yogurt', 'Dairy/Eggs'],
+  ])
+
+  it('returns an exact, non-Other library match unchanged', () => {
+    expect(resolveFoodGroup('Chicken Breast', index)).toBe('Meat/Poultry')
+    expect(resolveFoodGroup('greek yogurt', index)).toBe('Dairy/Eggs')
+  })
+
+  it('upgrades an Other-filed match to Supplements when a keyword matches', () => {
+    // Exact-matches the "my whey scoop" → Other entry, but "whey" upgrades it.
+    expect(resolveFoodGroup('My whey scoop', index)).toBe('Supplements')
+  })
+
+  it('keyword-classifies unmatched free-text supplements', () => {
+    expect(resolveFoodGroup('Protein Powder (vanilla)', index)).toBe('Supplements')
+    expect(resolveFoodGroup('Casein before bed', index)).toBe('Supplements')
+    expect(resolveFoodGroup('mass gainer', index)).toBe('Supplements')
+  })
+
+  it('does not misclassify ordinary high-protein foods', () => {
+    expect(resolveFoodGroup('High-protein bread', index)).toBe('Other')
+    expect(resolveFoodGroup('Unknown thing', index)).toBe('Other')
   })
 })

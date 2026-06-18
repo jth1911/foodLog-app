@@ -433,6 +433,36 @@
       "calories_kcal": "196"
     }
   ],
+  "Supplements": [
+    {
+      "food": "Whey Protein Powder",
+      "serving_size": "1 scoop (~32g)",
+      "protein_g": "24",
+      "carbs_g": "3",
+      "calories_kcal": "120"
+    },
+    {
+      "food": "Casein Protein Powder",
+      "serving_size": "1 scoop (~33g)",
+      "protein_g": "24",
+      "carbs_g": "3",
+      "calories_kcal": "120"
+    },
+    {
+      "food": "Plant-Based Protein Powder",
+      "serving_size": "1 scoop (~33g)",
+      "protein_g": "20-24",
+      "carbs_g": "4-8",
+      "calories_kcal": "110-130"
+    },
+    {
+      "food": "Protein Bar",
+      "serving_size": "1 bar (~60g)",
+      "protein_g": "20",
+      "carbs_g": "20-25",
+      "calories_kcal": "200-230"
+    }
+  ],
   "Other": [
     {
       "food": "Nutritional Yeast",

@@ -47,6 +47,7 @@ const PROTEIN_SOURCE_COLORS: Record<string, string> = {
   Legumes: '#9333ea',
   'Whole Grains': '#d97706',
   'Nuts/Seeds': '#a16207',
+  Supplements: '#db2777',
   Other: '#64748b',
 }
 
