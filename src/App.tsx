@@ -69,6 +69,7 @@ function App() {
           loggedFoods={foodLog.entries}
           goalHistory={foodLog.goalHistory}
           addEntry={foodLog.addEntry}
+          addEntries={foodLog.addEntries}
           updateEntry={foodLog.updateEntry}
           deleteEntry={foodLog.deleteEntry}
         />

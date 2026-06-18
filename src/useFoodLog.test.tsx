@@ -128,6 +128,20 @@ describe('useFoodLog — entry mutations', () => {
 
     expect(result.current.entries).toEqual([updated])
   })
+
+  it('appends a batch of entries in one update', () => {
+    const { result } = renderHook(() => useFoodLog(makeFakeStore([])))
+    const batch = [makeEntry('b-1'), makeEntry('b-2'), makeEntry('b-3')]
+
+    act(() => result.current.addEntries(batch))
+    expect(result.current.entries).toEqual(batch)
+  })
+
+  it('addEntries is a no-op for an empty batch', () => {
+    const { result } = renderHook(() => useFoodLog(makeFakeStore([])))
+    act(() => result.current.addEntries([]))
+    expect(result.current.entries).toEqual([])
+  })
 })
 
 describe('useFoodLog — goal history mutations', () => {

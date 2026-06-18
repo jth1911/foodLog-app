@@ -239,6 +239,7 @@ describe('Dashboard', () => {
           loggedFoods={[scaled]}
           goalHistory={[{ effectiveDate: GOALS_EPOCH, goals: DEFAULT_GOALS }]}
           addEntry={() => {}}
+          addEntries={() => {}}
           deleteEntry={() => {}}
           updateEntry={updateEntry}
         />,
@@ -252,6 +253,61 @@ describe('Dashboard', () => {
       expect(updated.id).toBe('s1')
       expect(updated.servingSize).toBeUndefined()
       expect(updated.quantity).toBeUndefined()
+    })
+  })
+
+  describe('CSV import', () => {
+    const HEADER = 'Date,Meal Type,Food Description,Fat,Carbs,Protein,Calories,Fiber'
+    const csvFile = (...rows: string[]) =>
+      new File([[HEADER, ...rows].join('\n')], 'meals.csv', { type: 'text/csv' })
+
+    it('opens the import modal from the Import CSV button', async () => {
+      const user = userEvent.setup()
+      render(
+        <DashboardView
+          today="2026-05-01"
+          loggedFoods={[]}
+          goalHistory={[{ effectiveDate: GOALS_EPOCH, goals: DEFAULT_GOALS }]}
+          addEntry={() => {}}
+          addEntries={() => {}}
+          deleteEntry={() => {}}
+          updateEntry={() => {}}
+        />,
+      )
+
+      await user.click(screen.getByRole('button', { name: /import csv/i }))
+      expect(screen.getByRole('dialog', { name: /import food entries/i })).toBeInTheDocument()
+    })
+
+    it('imports valid rows and navigates to the first entry’s date', async () => {
+      const user = userEvent.setup()
+      const addEntries = vi.fn()
+      render(
+        <DashboardView
+          today="2026-05-01"
+          loggedFoods={[]}
+          goalHistory={[{ effectiveDate: GOALS_EPOCH, goals: DEFAULT_GOALS }]}
+          addEntry={() => {}}
+          addEntries={addEntries}
+          deleteEntry={() => {}}
+          updateEntry={() => {}}
+        />,
+      )
+
+      await user.click(screen.getByRole('button', { name: /import csv/i }))
+      await user.upload(
+        screen.getByLabelText(/choose csv file/i),
+        csvFile('5/27/2026,Breakfast,Egg,5,1,6,70,0'),
+      )
+      await screen.findByText(/1 valid/i)
+      await user.click(screen.getByRole('button', { name: /import 1/i }))
+
+      expect(addEntries).toHaveBeenCalledTimes(1)
+      expect(addEntries.mock.calls[0][0]).toHaveLength(1)
+      // The header date label jumps to the imported entry's day.
+      expect(screen.getByRole('heading', { name: 'Food Log' }).nextSibling).toHaveTextContent(
+        /27 May 2026/,
+      )
     })
   })
 
@@ -269,6 +325,7 @@ describe('Dashboard', () => {
           loggedFoods={[]}
           goalHistory={history}
           addEntry={() => {}}
+          addEntries={() => {}}
           deleteEntry={() => {}}
           updateEntry={() => {}}
         />,
