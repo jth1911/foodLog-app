@@ -4,6 +4,8 @@ import {
   fluidTotalsForDate,
   fluidGoalStatus,
   fluidSeries,
+  fluidByTypeSeries,
+  activeDrinkTypes,
   type FluidEntry,
 } from './fluid'
 import { weekdayOf } from './dates'
@@ -82,5 +84,35 @@ describe('fluidSeries', () => {
       { date: '2026-06-17', weekday: weekdayOf('2026-06-17'), oz: 24 },
       { date: '2026-06-18', weekday: weekdayOf('2026-06-18'), oz: 12 },
     ])
+  })
+})
+
+describe('fluidByTypeSeries', () => {
+  it('splits each day’s oz total by drink type, zero-filling every type', () => {
+    const series = fluidByTypeSeries(fluids, ['2026-06-17', '2026-06-18'])
+    expect(series[0]).toMatchObject({ date: '2026-06-17', Water: 16, Juice: 8, Coffee: 0, Tea: 0 })
+    expect(series[1]).toMatchObject({ date: '2026-06-18', Coffee: 12, Water: 0, Juice: 0 })
+    // Every drink type is present as a key so each line stays continuous.
+    for (const type of DRINK_TYPES) expect(series[0]).toHaveProperty(type)
+  })
+
+  it('sums multiple drinks of the same type on a day', () => {
+    const sameType: FluidEntry[] = [
+      { id: 'a', date: '2026-06-17', week: 25, weekday: 'Wednesday', drinkType: 'Coffee', oz: 8, calories: 5 },
+      { id: 'b', date: '2026-06-17', week: 25, weekday: 'Wednesday', drinkType: 'Coffee', oz: 12, calories: 5 },
+    ]
+    expect(fluidByTypeSeries(sameType, ['2026-06-17'])[0].Coffee).toBe(20)
+  })
+})
+
+describe('activeDrinkTypes', () => {
+  it('returns only the types with volume, in DRINK_TYPES order', () => {
+    const series = fluidByTypeSeries(fluids, ['2026-06-16', '2026-06-17', '2026-06-18'])
+    // fluids use Water, Juice and Coffee — Water leads, Coffee precedes Juice.
+    expect(activeDrinkTypes(series)).toEqual(['Water', 'Coffee', 'Juice'])
+  })
+
+  it('is empty when nothing is logged', () => {
+    expect(activeDrinkTypes(fluidByTypeSeries([], ['2026-06-17']))).toEqual([])
   })
 })

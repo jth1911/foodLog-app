@@ -24,7 +24,13 @@ import {
   type HeatmapDay,
 } from './lib/monthly'
 import { weightSeries, TREND_WINDOW, type WeightEntry } from './lib/weight'
-import { fluidSeries, type FluidEntry } from './lib/fluid'
+import {
+  fluidSeries,
+  fluidByTypeSeries,
+  activeDrinkTypes,
+  type DrinkType,
+  type FluidEntry,
+} from './lib/fluid'
 import { addMonths, monthDays, startOfMonth, todayIso } from './lib/dates'
 
 // A heatmap's presentation. The band classification (under/in-range/over) is
@@ -96,6 +102,17 @@ const TARGET_COLOR = '#dc2626'
 // Fluid-intake bars: hydration blue, deepening on days that hit the goal.
 const FLUID_COLOR = '#0ea5e9'
 const FLUID_MET_COLOR = '#0369a1'
+
+// A distinct hue per drink type for the by-type comparison lines.
+const DRINK_COLORS: Record<DrinkType, string> = {
+  Water: '#0ea5e9',
+  Coffee: '#92400e',
+  Tea: '#16a34a',
+  Juice: '#f59e0b',
+  Soda: '#dc2626',
+  Milk: '#64748b',
+  Other: '#9333ea',
+}
 
 // A y-axis domain that snugly fits the weight values (and the target line when
 // set), padded a couple of pounds. Falls back to a unit range when empty.
@@ -237,6 +254,7 @@ function MonthlyReport({
   const dates = useMemo(() => monthDays(month), [month])
   const weightData = useMemo(() => weightSeries(weights, dates), [weights, dates])
   const fluidData = useMemo(() => fluidSeries(fluids, dates), [fluids, dates])
+  const fluidTypeData = useMemo(() => fluidByTypeSeries(fluids, dates), [fluids, dates])
   const calorieDays = useMemo(
     () => macroHeatmap(loggedFoods, goalHistory, dates, 'calories'),
     [loggedFoods, goalHistory, dates],
@@ -254,6 +272,7 @@ function MonthlyReport({
   const hasMacros = macroData.some((m) => m.grams > 0)
   const visibleMacros = macroData.filter((m) => m.grams > 0)
   const hasFluid = fluidData.some((d) => d.oz > 0)
+  const activeTypes = activeDrinkTypes(fluidTypeData)
   const hasWeight = weightData.some((d) => d.lb != null)
   const weightValues = weightData.map((d) => d.lb).filter((v): v is number => v != null)
   const yDomain = weightDomain(targetWeight != null ? [...weightValues, targetWeight] : weightValues)
@@ -390,7 +409,7 @@ function MonthlyReport({
         </section>
 
         {/* Daily fluid intake across the month vs the hydration goal */}
-        <section aria-label="Fluid intake" className={`${cardClass} lg:col-span-2`}>
+        <section aria-label="Fluid intake" className={cardClass}>
           <h2 className="mb-1 text-lg font-semibold text-slate-900">Fluid intake</h2>
           <p className="mb-4 text-sm text-slate-500">
             Daily fluid (fl oz)
@@ -428,6 +447,50 @@ function MonthlyReport({
             </div>
           ) : (
             <p className="py-12 text-center text-sm text-slate-400">No fluid logged this month.</p>
+          )}
+        </section>
+
+        {/* Fluid by type: one line per drink type, to compare water/coffee/tea/… */}
+        <section aria-label="Fluid by type" className={cardClass}>
+          <h2 className="mb-1 text-lg font-semibold text-slate-900">Fluid by type</h2>
+          <p className="mb-4 text-sm text-slate-500">
+            Daily fl oz per drink type — compare water vs coffee vs tea and the rest.
+          </p>
+          {activeTypes.length > 0 ? (
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={fluidTypeData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(iso) => String(dayOfMonth(String(iso)))}
+                    fontSize={12}
+                    stroke="#94a3b8"
+                  />
+                  <YAxis fontSize={12} stroke="#94a3b8" />
+                  <Tooltip
+                    labelFormatter={(iso) => String(iso)}
+                    formatter={(value, name) => [`${value} fl oz`, name]}
+                  />
+                  <Legend />
+                  {activeTypes.map((type) => (
+                    <Line
+                      key={type}
+                      type="monotone"
+                      dataKey={type}
+                      name={type}
+                      stroke={DRINK_COLORS[type]}
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="py-12 text-center text-sm text-slate-400">
+              No fluid logged this month to compare.
+            </p>
           )}
         </section>
       </div>

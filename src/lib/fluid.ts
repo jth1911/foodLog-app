@@ -68,3 +68,28 @@ export function fluidSeries(fluids: FluidEntry[], dates: string[]): FluidDay[] {
     oz: fluidTotalsForDate(fluids, date).oz,
   }))
 }
+
+// One row per date carrying each drink type's oz total for that day, so a line
+// chart can compare types (water vs coffee vs tea …) over the window. Every
+// DRINK_TYPES key is always present (0 when none), keeping each line continuous.
+export type FluidTypeDay = { date: string; weekday: string } & Record<DrinkType, number>
+
+/** Per-day oz total split by drink type across `dates`. Mirrors dailyMacroSeries
+ * — a row per date with one numeric field per drink type. */
+export function fluidByTypeSeries(fluids: FluidEntry[], dates: string[]): FluidTypeDay[] {
+  return dates.map((date) => {
+    const row = { date, weekday: weekdayOf(date) } as FluidTypeDay
+    for (const type of DRINK_TYPES) row[type] = 0
+    for (const drink of fluids) {
+      if (drink.date !== date) continue
+      row[drink.drinkType] = (row[drink.drinkType] ?? 0) + drink.oz
+    }
+    return row
+  })
+}
+
+/** The drink types with any volume across `series`, in DRINK_TYPES order — the
+ * lines a comparison chart should actually draw (empty types are omitted). */
+export function activeDrinkTypes(series: FluidTypeDay[]): DrinkType[] {
+  return DRINK_TYPES.filter((type) => series.some((row) => row[type] > 0))
+}

@@ -239,5 +239,36 @@ describe('MonthlyReport', () => {
       const ref = region.querySelector('[data-testid="reference-line"]')
       expect(ref!.getAttribute('data-y')).toBe('64')
     })
+
+    it('splits the by-type chart into one oz field per drink type per day', () => {
+      const drink = (date: string, drinkType: 'Water' | 'Coffee' | 'Tea', oz: number) => ({
+        id: crypto.randomUUID(),
+        date,
+        week: isoWeekOf(date),
+        weekday: weekdayOf(date),
+        drinkType,
+        oz,
+        calories: 0,
+      })
+      const fluids = [
+        drink('2026-06-01', 'Water', 16),
+        drink('2026-06-01', 'Coffee', 12),
+        drink('2026-06-15', 'Tea', 8),
+      ]
+      render(
+        <MonthlyReport loggedFoods={[]} goalHistory={goals(2000)} today={TODAY} fluids={fluids} />,
+      )
+      const data = chartDataIn('Fluid by type') as Array<Record<string, number | string>>
+      const first = data.find((d) => d.date === '2026-06-01')!
+      expect(first.Water).toBe(16)
+      expect(first.Coffee).toBe(12)
+      expect(data.find((d) => d.date === '2026-06-15')!.Tea).toBe(8)
+    })
+
+    it('shows an empty state for the by-type chart when no fluid is logged', () => {
+      render(<MonthlyReport loggedFoods={[]} goalHistory={goals(2000)} today={TODAY} fluids={[]} />)
+      const region = screen.getByRole('region', { name: 'Fluid by type' })
+      expect(within(region).getByText(/no fluid logged this month/i)).toBeInTheDocument()
+    })
   })
 })
