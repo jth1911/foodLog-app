@@ -9,6 +9,7 @@ import {
 import { localStorageStore, type FoodLogStore } from './lib/foodLogRepo'
 import { seedFoodsFromJson, type UserFoodReference } from './lib/foods'
 import { type WeightEntry } from './lib/weight'
+import { type FluidEntry } from './lib/fluid'
 import { isoWeekOf, weekdayOf } from './lib/dates'
 import { log } from './lib/logger'
 
@@ -103,6 +104,11 @@ export type FoodLog = {
   weights: WeightEntry[]
   // The target weight in pounds, or null when none has been set yet.
   targetWeight: number | null
+  // The daily fluid log. Like weights, starts blank — only explicitly-logged
+  // drinks are stored, with no seeding.
+  fluids: FluidEntry[]
+  // The daily fluid target in fluid ounces, or null when none has been set yet.
+  targetFluid: number | null
   addEntry: (entry: FoodEntry) => void
   // Append a batch of entries in one update, e.g. a CSV bulk import.
   addEntries: (entries: FoodEntry[]) => void
@@ -126,6 +132,13 @@ export type FoodLog = {
   setWeight: (date: string, lb: number) => void
   // Set the single target weight (pounds).
   setTargetWeight: (lb: number) => void
+  // Fluid mutations, mirroring the food-entry ones. addFluid appends, updateFluid
+  // replaces by id, deleteFluid removes by id.
+  addFluid: (fluid: FluidEntry) => void
+  updateFluid: (updated: FluidEntry) => void
+  deleteFluid: (id: string) => void
+  // Set the single daily fluid target (fluid ounces).
+  setTargetFluid: (oz: number) => void
 }
 
 const byEffectiveDate = (a: GoalChange, b: GoalChange) =>
@@ -169,6 +182,11 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   const [targetWeight, setTargetWeightState] = useState<number | null>(() =>
     store.loadTargetWeight(),
   )
+  // Start blank with no seeded drinks — only explicitly-logged fluids are stored.
+  const [fluids, setFluids] = useState<FluidEntry[]>(() => store.loadFluids() ?? [])
+  const [targetFluid, setTargetFluidState] = useState<number | null>(() =>
+    store.loadTargetFluid(),
+  )
 
   // Persist on every change, and on mount (which writes the initial seed/
   // migrated history back, so a later edited-to-one state isn't re-migrated).
@@ -189,6 +207,13 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   useEffect(() => {
     if (targetWeight !== null) store.saveTargetWeight(targetWeight)
   }, [store, targetWeight])
+  useEffect(() => {
+    store.saveFluids(fluids)
+  }, [store, fluids])
+  // Like the target weight: persist once set, leave the key absent when null.
+  useEffect(() => {
+    if (targetFluid !== null) store.saveTargetFluid(targetFluid)
+  }, [store, targetFluid])
 
   const addEntry = useCallback((entry: FoodEntry) => {
     log('info', 'Entry added', { description: entry.description, date: entry.date })
@@ -283,12 +308,34 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
     setTargetWeightState(lb)
   }, [])
 
+  const addFluid = useCallback((fluid: FluidEntry) => {
+    log('info', 'Fluid added', { drinkType: fluid.drinkType, oz: fluid.oz, date: fluid.date })
+    setFluids((prev) => [...prev, fluid])
+  }, [])
+
+  const updateFluid = useCallback((updated: FluidEntry) => {
+    log('info', 'Fluid updated', { id: updated.id, drinkType: updated.drinkType })
+    setFluids((prev) => prev.map((f) => (f.id === updated.id ? updated : f)))
+  }, [])
+
+  const deleteFluid = useCallback((id: string) => {
+    log('info', 'Fluid deleted', { id })
+    setFluids((prev) => prev.filter((f) => f.id !== id))
+  }, [])
+
+  const setTargetFluid = useCallback((oz: number) => {
+    log('info', 'Target fluid set', { oz })
+    setTargetFluidState(oz)
+  }, [])
+
   return {
     entries,
     goalHistory,
     foods,
     weights,
     targetWeight,
+    fluids,
+    targetFluid,
     addEntry,
     addEntries,
     updateEntry,
@@ -302,5 +349,9 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
     deleteCategory,
     setWeight,
     setTargetWeight,
+    addFluid,
+    updateFluid,
+    deleteFluid,
+    setTargetFluid,
   }
 }

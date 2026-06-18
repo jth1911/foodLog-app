@@ -6,11 +6,14 @@ import {
   GOAL_HISTORY_KEY,
   TARGET_WEIGHT_KEY,
   WEIGHTS_KEY,
+  FLUIDS_KEY,
+  TARGET_FLUID_KEY,
   localStorageStore,
 } from './foodLogRepo'
 import { DEFAULT_GOALS, type FoodEntry, type GoalChange } from './nutrition'
 import { type UserFoodReference } from './foods'
 import { type WeightEntry } from './weight'
+import { type FluidEntry } from './fluid'
 
 const baseEntry: FoodEntry = {
   id: 'abc',
@@ -173,6 +176,50 @@ describe('localStorageStore', () => {
     for (const bad of ['0', '-5', '"170"', 'null', 'true']) {
       localStorage.setItem(TARGET_WEIGHT_KEY, bad)
       expect(localStorageStore.loadTargetWeight()).toBeNull()
+    }
+  })
+
+  const baseFluids: FluidEntry[] = [
+    { id: 'd1', date: '2026-06-17', week: 25, weekday: 'Wednesday', drinkType: 'Water', oz: 16, calories: 0 },
+    { id: 'd2', date: '2026-06-17', week: 25, weekday: 'Wednesday', drinkType: 'Juice', oz: 8, calories: 110 },
+  ]
+
+  it('round-trips the fluid log through localStorage', () => {
+    localStorageStore.saveFluids(baseFluids)
+    expect(localStorageStore.loadFluids()).toEqual(baseFluids)
+    expect(localStorage.getItem(FLUIDS_KEY)).toContain('Juice')
+  })
+
+  it('persists an empty fluid log distinctly from "nothing stored"', () => {
+    expect(localStorageStore.loadFluids()).toBeNull()
+    localStorageStore.saveFluids([])
+    expect(localStorageStore.loadFluids()).toEqual([])
+  })
+
+  it('rejects wrong-shaped fluid logs (non-array, bad date/drinkType/oz)', () => {
+    for (const bad of ['{}', '42', 'null', '"x"']) {
+      localStorage.setItem(FLUIDS_KEY, bad)
+      expect(localStorageStore.loadFluids()).toBeNull()
+    }
+    // Missing drinkType, and a non-finite oz, both fall back.
+    localStorage.setItem(FLUIDS_KEY, JSON.stringify([{ date: '2026-06-17', oz: 8, calories: 0 }]))
+    expect(localStorageStore.loadFluids()).toBeNull()
+    localStorage.setItem(
+      FLUIDS_KEY,
+      JSON.stringify([{ date: '2026-06-17', drinkType: 'Water', oz: 'lots', calories: 0 }]),
+    )
+    expect(localStorageStore.loadFluids()).toBeNull()
+  })
+
+  it('round-trips the target fluid through localStorage', () => {
+    localStorageStore.saveTargetFluid(64)
+    expect(localStorageStore.loadTargetFluid()).toBe(64)
+  })
+
+  it('rejects a non-positive or non-numeric target fluid', () => {
+    for (const bad of ['0', '-5', '"64"', 'null', 'true']) {
+      localStorage.setItem(TARGET_FLUID_KEY, bad)
+      expect(localStorageStore.loadTargetFluid()).toBeNull()
     }
   })
 

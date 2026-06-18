@@ -12,10 +12,13 @@ import {
   type GoalChange,
 } from './lib/nutrition'
 import MealFeed from './MealFeed'
+import FluidSection from './FluidSection'
 import AddFoodModal, { type NewFoodInput } from './AddFoodModal'
+import AddFluidModal, { type NewFluidInput } from './AddFluidModal'
 import BulkImportModal from './BulkImportModal'
 import { addDays, dateToIso, isoToDate, isoWeekOf, todayIso, weekdayOf } from './lib/dates'
 import { weightForDate, previousWeight, type WeightEntry } from './lib/weight'
+import { fluidTotalsForDate, type FluidEntry } from './lib/fluid'
 import { useFoodLog } from './useFoodLog'
 
 const statusClasses: Record<'met' | 'unmet', string> = {
@@ -142,6 +145,13 @@ type DashboardViewProps = DashboardProps & {
   updateEntry: (entry: FoodEntry) => void
   deleteEntry: (id: string) => void
   setWeight: (date: string, lb: number) => void
+  // Fluid data + mutations. Optional with empty defaults so existing callers and
+  // tests that don't exercise the fluid section still type-check.
+  fluids?: FluidEntry[]
+  targetFluid?: number | null
+  addFluid?: (fluid: FluidEntry) => void
+  updateFluid?: (fluid: FluidEntry) => void
+  deleteFluid?: (id: string) => void
 }
 
 /**
@@ -161,10 +171,18 @@ export function DashboardView({
   updateEntry,
   deleteEntry,
   setWeight,
+  fluids = [],
+  targetFluid = null,
+  addFluid,
+  updateFluid,
+  deleteFluid,
 }: DashboardViewProps) {
   const [selectedDate, setSelectedDate] = useState(today)
   const [isFabOpen, setIsFabOpen] = useState(false)
   const [isImportOpen, setIsImportOpen] = useState(false)
+  // The fluid add-modal (FAB), and the drink being edited if any.
+  const [isFluidFabOpen, setIsFluidFabOpen] = useState(false)
+  const [editingFluid, setEditingFluid] = useState<FluidEntry | null>(null)
   // The entry currently being edited, if any. Opens the modal in edit mode.
   const [editingEntry, setEditingEntry] = useState<FoodEntry | null>(null)
   const [isCalendarOpen, setIsCalendarOpen] = useState(false)
@@ -184,11 +202,19 @@ export function DashboardView({
   // a food was picked on the Foods page), or when an entry is being edited.
   const isModalOpen = isFabOpen || prefill != null || editingEntry != null
 
+  // The fluid modal is open when opened via its FAB or when editing a drink.
+  const isFluidModalOpen = isFluidFabOpen || editingFluid != null
+
   // Closing always clears any pending pre-fill/edit so the FAB next opens blank.
   const closeModal = () => {
     setIsFabOpen(false)
     setEditingEntry(null)
     onPrefillConsumed?.()
+  }
+
+  const closeFluidModal = () => {
+    setIsFluidFabOpen(false)
+    setEditingFluid(null)
   }
 
   const totals = useMemo(
@@ -199,6 +225,18 @@ export function DashboardView({
   const foodsForDate = useMemo(
     () => loggedFoods.filter((f) => f.date === selectedDate),
     [loggedFoods, selectedDate],
+  )
+
+  const fluidsForDate = useMemo(
+    () => fluids.filter((f) => f.date === selectedDate),
+    [fluids, selectedDate],
+  )
+
+  // Calories from the day's drinks, rolled into the summary's calorie figure so
+  // caloric drinks (juice, soda, …) count against the calorie goal alongside food.
+  const fluidCalories = useMemo(
+    () => fluidTotalsForDate(fluids, selectedDate).calories,
+    [fluids, selectedDate],
   )
 
   // The goal in effect on the viewed day, resolved from the dated history. The
@@ -233,6 +271,29 @@ export function DashboardView({
 
   const deleteFood = (id: string) => {
     deleteEntry(id)
+  }
+
+  // Stamp a new drink with the selected day, mirroring addFood.
+  const addDrink = (input: NewFluidInput) => {
+    addFluid?.({
+      id: crypto.randomUUID(),
+      date: selectedDate,
+      week: isoWeekOf(selectedDate),
+      weekday: weekdayOf(selectedDate),
+      ...input,
+    })
+  }
+
+  // Save a drink edit in place: keep id/date/week/weekday, apply the edited fields.
+  const saveFluidEdit = (input: NewFluidInput) => {
+    if (!editingFluid) return
+    updateFluid?.({
+      id: editingFluid.id,
+      date: editingFluid.date,
+      week: editingFluid.week,
+      weekday: editingFluid.weekday,
+      ...input,
+    })
   }
 
   // Append the imported entries and jump to the first one's day so the result
@@ -350,7 +411,9 @@ export function DashboardView({
               <dl className="grid grid-cols-2 gap-4 sm:grid-cols-5">
                 {MACRO_KEYS.map((macro) => {
                   const meta = MACRO_META[macro]
-                  const consumed = totals[macro]
+                  // Caloric drinks count toward the day's calorie total; other
+                  // macros are food-only (drinks carry calories only).
+                  const consumed = macro === 'calories' ? totals[macro] + fluidCalories : totals[macro]
                   const goal = goals[macro]
                   const status = goalStatus(macro, consumed, goal)
                   return (
@@ -380,6 +443,15 @@ export function DashboardView({
               onSave={(lb) => setWeight(selectedDate, lb)}
             />
 
+            {/* Drinks for the selected day, with oz total + goal progress */}
+            <FluidSection
+              fluids={fluidsForDate}
+              date={selectedDate}
+              targetFluid={targetFluid}
+              onEdit={setEditingFluid}
+              onDelete={(id) => deleteFluid?.(id)}
+            />
+
             {/* Food log grouped by meal, filtered to the selected date */}
             <MealFeed loggedFoods={foodsForDate} onDelete={deleteFood} onEdit={setEditingEntry} />
           </main>
@@ -396,6 +468,14 @@ export function DashboardView({
           className="flex h-14 w-14 items-center justify-center rounded-full bg-slate-900 text-3xl leading-none text-white shadow-lg hover:bg-slate-700 focus:outline-none focus:ring-2 focus:ring-slate-400"
         >
           +
+        </button>
+        <button
+          type="button"
+          aria-label="Add drink"
+          onClick={() => setIsFluidFabOpen(true)}
+          className="rounded-full border border-slate-300 bg-white px-3 py-1.5 text-xs font-medium text-slate-600 shadow-md hover:bg-slate-100 focus:outline-none focus:ring-2 focus:ring-slate-400"
+        >
+          Add drink
         </button>
         <button
           type="button"
@@ -416,6 +496,22 @@ export function DashboardView({
           />
         ) : (
           <AddFoodModal onAdd={addFood} onClose={closeModal} initialValues={prefill ?? undefined} />
+        ))}
+
+      {isFluidModalOpen &&
+        (editingFluid ? (
+          <AddFluidModal
+            onAdd={saveFluidEdit}
+            onClose={closeFluidModal}
+            initialValues={{
+              drinkType: editingFluid.drinkType,
+              oz: editingFluid.oz,
+              calories: editingFluid.calories,
+            }}
+            editing
+          />
+        ) : (
+          <AddFluidModal onAdd={addDrink} onClose={closeFluidModal} />
         ))}
 
       {isImportOpen && (
@@ -441,6 +537,11 @@ function Dashboard(props: DashboardProps = {}) {
     updateEntry,
     deleteEntry,
     setWeight,
+    fluids,
+    targetFluid,
+    addFluid,
+    updateFluid,
+    deleteFluid,
   } = useFoodLog()
   return (
     <DashboardView
@@ -453,6 +554,11 @@ function Dashboard(props: DashboardProps = {}) {
       updateEntry={updateEntry}
       deleteEntry={deleteEntry}
       setWeight={setWeight}
+      fluids={fluids}
+      targetFluid={targetFluid}
+      addFluid={addFluid}
+      updateFluid={updateFluid}
+      deleteFluid={deleteFluid}
     />
   )
 }

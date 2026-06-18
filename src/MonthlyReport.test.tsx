@@ -25,7 +25,14 @@ vi.mock('recharts', () => {
         {children}
       </div>
     ),
+    BarChart: ({ data, children }: { data?: unknown[]; children?: React.ReactNode }) => (
+      <div data-testid="bar-chart">
+        <div data-testid="chart-data">{JSON.stringify(data)}</div>
+        {children}
+      </div>
+    ),
     Line: () => null,
+    Bar: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     Cell: () => null,
     XAxis: () => null,
     YAxis: () => null,
@@ -187,6 +194,50 @@ describe('MonthlyReport', () => {
       const ref = region.querySelector('[data-testid="reference-line"]')
       expect(ref).not.toBeNull()
       expect(ref!.getAttribute('data-y')).toBe('170')
+    })
+  })
+
+  describe('fluid intake', () => {
+    const fluid = (date: string, oz: number) => ({
+      id: crypto.randomUUID(),
+      date,
+      week: isoWeekOf(date),
+      weekday: weekdayOf(date),
+      drinkType: 'Water' as const,
+      oz,
+      calories: 0,
+    })
+
+    it('shows an empty state when no fluid is logged this month', () => {
+      render(<MonthlyReport loggedFoods={[]} goalHistory={goals(2000)} today={TODAY} fluids={[]} />)
+      expect(screen.getByText('No fluid logged this month.')).toBeInTheDocument()
+    })
+
+    it('feeds the fluid chart one oz total per day for the month', () => {
+      const fluids = [fluid('2026-06-01', 16), fluid('2026-06-01', 8), fluid('2026-06-15', 40)]
+      render(
+        <MonthlyReport loggedFoods={[]} goalHistory={goals(2000)} today={TODAY} fluids={fluids} />,
+      )
+      const data = chartDataIn('Fluid intake') as { date: string; oz: number }[]
+      expect(data).toHaveLength(30)
+      expect(data.find((d) => d.date === '2026-06-01')!.oz).toBe(24)
+      expect(data.find((d) => d.date === '2026-06-15')!.oz).toBe(40)
+      expect(data.find((d) => d.date === '2026-06-10')!.oz).toBe(0)
+    })
+
+    it('renders the target reference line on the fluid chart when set', () => {
+      render(
+        <MonthlyReport
+          loggedFoods={[]}
+          goalHistory={goals(2000)}
+          today={TODAY}
+          fluids={[fluid('2026-06-01', 24)]}
+          targetFluid={64}
+        />,
+      )
+      const region = screen.getByRole('region', { name: 'Fluid intake' })
+      const ref = region.querySelector('[data-testid="reference-line"]')
+      expect(ref!.getAttribute('data-y')).toBe('64')
     })
   })
 })

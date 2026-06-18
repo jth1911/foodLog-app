@@ -78,6 +78,11 @@ function App() {
           updateEntry={foodLog.updateEntry}
           deleteEntry={foodLog.deleteEntry}
           setWeight={foodLog.setWeight}
+          fluids={foodLog.fluids}
+          targetFluid={foodLog.targetFluid}
+          addFluid={foodLog.addFluid}
+          updateFluid={foodLog.updateFluid}
+          deleteFluid={foodLog.deleteFluid}
         />
       </div>
       <div hidden={activeTab !== 'foods'}>
@@ -98,6 +103,8 @@ function App() {
           onDelete={foodLog.deleteGoalChange}
           targetWeight={foodLog.targetWeight}
           onSetTargetWeight={foodLog.setTargetWeight}
+          targetFluid={foodLog.targetFluid}
+          onSetTargetFluid={foodLog.setTargetFluid}
         />
       </div>
       <div hidden={activeTab !== 'weekly'}>
@@ -107,6 +114,8 @@ function App() {
           foods={foodLog.foods}
           weights={foodLog.weights}
           targetWeight={foodLog.targetWeight}
+          fluids={foodLog.fluids}
+          targetFluid={foodLog.targetFluid}
         />
       </div>
       <div hidden={activeTab !== 'monthly'}>
@@ -115,6 +124,8 @@ function App() {
           goalHistory={foodLog.goalHistory}
           weights={foodLog.weights}
           targetWeight={foodLog.targetWeight}
+          fluids={foodLog.fluids}
+          targetFluid={foodLog.targetFluid}
         />
       </div>
 

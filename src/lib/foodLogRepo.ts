@@ -5,6 +5,7 @@
 import { MACRO_KEYS, type FoodEntry, type GoalChange, type Goals } from './nutrition'
 import { type UserFoodReference } from './foods'
 import { type WeightEntry } from './weight'
+import { type FluidEntry } from './fluid'
 
 // Versioned keys so a future shape change can migrate (or ignore) old data
 // rather than mis-reading it.
@@ -22,6 +23,12 @@ export const FOODS_KEY = 'foodlog:foods:v1'
 export const WEIGHTS_KEY = 'foodlog:weights:v1'
 // The single target weight in pounds (#45). A lone number, not effective-dated.
 export const TARGET_WEIGHT_KEY = 'foodlog:targetWeight:v1'
+// Daily fluid-intake log (#49): a list of FluidEntry (drink type + oz + calories
+// per day). See src/lib/fluid.ts.
+export const FLUIDS_KEY = 'foodlog:fluids:v1'
+// The single daily fluid target in fluid ounces (#49). A lone number, like the
+// target weight — not effective-dated.
+export const TARGET_FLUID_KEY = 'foodlog:targetFluid:v1'
 
 /** A durable store for the single local user's food log. */
 export type FoodLogStore = {
@@ -39,6 +46,12 @@ export type FoodLogStore = {
   // value is missing/corrupt.
   loadTargetWeight(): number | null
   saveTargetWeight(lb: number): void
+  loadFluids(): FluidEntry[] | null
+  saveFluids(fluids: FluidEntry[]): void
+  // The daily fluid target in fluid ounces, or null when none has been set or the
+  // stored value is missing/corrupt.
+  loadTargetFluid(): number | null
+  saveTargetFluid(oz: number): void
   // Read-only access to the legacy single goal, for one-time migration into the
   // history. Returns null when there's nothing legacy to migrate.
   loadLegacyGoals(): Goals | null
@@ -144,6 +157,30 @@ function isTargetWeight(value: unknown): value is number {
   return typeof value === 'number' && Number.isFinite(value) && value > 0
 }
 
+// A stored fluid log must be an array whose every entry carries a string date and
+// drinkType plus finite numeric oz/calories; anything else falls back rather than
+// feeding bad shapes to the day aggregation.
+function isFluidEntry(value: unknown): value is FluidEntry {
+  if (typeof value !== 'object' || value === null || Array.isArray(value)) return false
+  const { date, drinkType, oz, calories } = value as Record<string, unknown>
+  return (
+    typeof date === 'string' &&
+    typeof drinkType === 'string' &&
+    Number.isFinite(oz) &&
+    Number.isFinite(calories)
+  )
+}
+
+function isFluidEntryArray(value: unknown): value is FluidEntry[] {
+  return Array.isArray(value) && value.every(isFluidEntry)
+}
+
+// A stored fluid target must be a finite, positive number; same rule as the
+// target weight — zero/negative/NaN or any non-number means "no target set".
+function isTargetFluid(value: unknown): value is number {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0
+}
+
 function saveJson(key: string, value: unknown): void {
   const storage = getStorage()
   if (!storage) return
@@ -167,5 +204,9 @@ export const localStorageStore: FoodLogStore = {
   saveWeights: (weights) => saveJson(WEIGHTS_KEY, weights),
   loadTargetWeight: () => loadJson(TARGET_WEIGHT_KEY, isTargetWeight),
   saveTargetWeight: (lb) => saveJson(TARGET_WEIGHT_KEY, lb),
+  loadFluids: () => loadJson(FLUIDS_KEY, isFluidEntryArray),
+  saveFluids: (fluids) => saveJson(FLUIDS_KEY, fluids),
+  loadTargetFluid: () => loadJson(TARGET_FLUID_KEY, isTargetFluid),
+  saveTargetFluid: (oz) => saveJson(TARGET_FLUID_KEY, oz),
   loadLegacyGoals: () => loadJson(GOALS_KEY, isGoals),
 }
