@@ -1,5 +1,15 @@
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { addDays, weekdayOf, isoWeekOf, todayIso, isoToDate, dateToIso } from './dates'
+import {
+  addDays,
+  weekdayOf,
+  isoWeekOf,
+  todayIso,
+  isoToDate,
+  dateToIso,
+  startOfMonth,
+  addMonths,
+  monthDays,
+} from './dates'
 
 describe('addDays', () => {
   it('moves forward and backward by one day', () => {
@@ -84,6 +94,60 @@ describe('todayIso', () => {
     expect(todayIso()).toBe('2026-12-31')
     vi.setSystemTime(new Date(2027, 0, 1, 0, 0, 1))
     expect(todayIso()).toBe('2027-01-01')
+  })
+})
+
+describe('startOfMonth', () => {
+  it('pins any day to the first of its month', () => {
+    expect(startOfMonth('2026-06-17')).toBe('2026-06-01')
+    expect(startOfMonth('2026-06-01')).toBe('2026-06-01')
+    expect(startOfMonth('2026-12-31')).toBe('2026-12-01')
+  })
+})
+
+describe('addMonths', () => {
+  it('steps forward and backward by one month', () => {
+    expect(addMonths('2026-06-01', 1)).toBe('2026-07-01')
+    expect(addMonths('2026-06-01', -1)).toBe('2026-05-01')
+  })
+
+  it('normalises the day to the first regardless of input day', () => {
+    expect(addMonths('2026-06-17', 1)).toBe('2026-07-01')
+  })
+
+  it('rolls over year boundaries in both directions', () => {
+    expect(addMonths('2026-12-01', 1)).toBe('2027-01-01')
+    expect(addMonths('2026-01-01', -1)).toBe('2025-12-01')
+  })
+
+  it('steps by multiple months', () => {
+    expect(addMonths('2026-06-01', 7)).toBe('2027-01-01')
+    expect(addMonths('2026-06-01', -8)).toBe('2025-10-01')
+  })
+})
+
+describe('monthDays', () => {
+  it('lists all 30 days of a 30-day month, ascending', () => {
+    const days = monthDays('2026-06-17')
+    expect(days).toHaveLength(30)
+    expect(days[0]).toBe('2026-06-01')
+    expect(days[29]).toBe('2026-06-30')
+  })
+
+  it('lists 31 days for a 31-day month', () => {
+    expect(monthDays('2026-07-15')).toHaveLength(31)
+  })
+
+  it('handles a 28-day February', () => {
+    const days = monthDays('2027-02-10')
+    expect(days).toHaveLength(28)
+    expect(days[27]).toBe('2027-02-28')
+  })
+
+  it('handles a leap-year February (29 days)', () => {
+    const days = monthDays('2028-02-10')
+    expect(days).toHaveLength(29)
+    expect(days[28]).toBe('2028-02-29')
   })
 })
 
