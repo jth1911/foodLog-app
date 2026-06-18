@@ -19,11 +19,28 @@ vi.mock('recharts', () => {
         {children}
       </div>
     ),
+    LineChart: ({ data, children }: { data?: unknown[]; children?: React.ReactNode }) => (
+      <div data-testid="line-chart">
+        <div data-testid="chart-data">{JSON.stringify(data)}</div>
+        {children}
+      </div>
+    ),
+    Line: () => null,
     Cell: () => null,
+    XAxis: () => null,
+    YAxis: () => null,
+    CartesianGrid: () => null,
     Tooltip: () => null,
     Legend: () => null,
+    ReferenceLine: ({ y }: { y?: number }) => <div data-testid="reference-line" data-y={y} />,
   }
 })
+
+// The chart-data a named region's chart was handed.
+function chartDataIn(regionName: string): unknown[] {
+  const region = screen.getByRole('region', { name: regionName })
+  return JSON.parse(region.querySelector('[data-testid="chart-data"]')!.textContent!)
+}
 
 const TODAY = '2026-06-17' // June 2026 (a 30-day month)
 
@@ -86,8 +103,8 @@ describe('MonthlyReport', () => {
     const entries = [entry({ date: '2026-06-10', protein: 100, carbs: 100, fat: 0 })]
     render(<MonthlyReport loggedFoods={entries} goalHistory={goals(2000)} today={TODAY} />)
     // Fat is 0g, so only protein and carbs are passed to the (filtered) pie.
-    const data = JSON.parse(screen.getByTestId('chart-data').textContent!)
-    expect(data.map((d: { macro: string }) => d.macro)).toEqual(['protein', 'carbs'])
+    const data = chartDataIn('Macro ratio') as { macro: string }[]
+    expect(data.map((d) => d.macro)).toEqual(['protein', 'carbs'])
   })
 
   it('disables forward navigation in the current month and enables it after stepping back', async () => {
@@ -127,5 +144,49 @@ describe('MonthlyReport', () => {
     expect(heatmap.getByTitle('2026-06-03: 90 g — Missed').className).toContain('bg-rose-500')
     expect(heatmap.getByTitle('2026-06-04: 120 g — Near goal').className).toContain('bg-amber-400')
     expect(heatmap.getByTitle('2026-06-05: 150 g — Hit').className).toContain('bg-emerald-500')
+  })
+
+  describe('weight trend', () => {
+    const weights = [
+      { date: '2026-06-01', lb: 180 },
+      { date: '2026-06-15', lb: 178 },
+    ]
+
+    it('shows an empty state when no weight is logged this month', () => {
+      render(<MonthlyReport loggedFoods={[]} goalHistory={goals(2000)} today={TODAY} weights={[]} />)
+      expect(screen.getByText('No weight logged this month.')).toBeInTheDocument()
+    })
+
+    it('feeds the line chart only the recorded days for the month (gaps null)', () => {
+      render(
+        <MonthlyReport
+          loggedFoods={[]}
+          goalHistory={goals(2000)}
+          today={TODAY}
+          weights={weights}
+        />,
+      )
+      const data = chartDataIn('Weight trend') as { date: string; lb: number | null }[]
+      expect(data).toHaveLength(30) // June
+      expect(data.find((d) => d.date === '2026-06-01')!.lb).toBe(180)
+      expect(data.find((d) => d.date === '2026-06-15')!.lb).toBe(178)
+      expect(data.find((d) => d.date === '2026-06-10')!.lb).toBeNull() // unlogged → gap
+    })
+
+    it('renders the target reference line when a target is set', () => {
+      render(
+        <MonthlyReport
+          loggedFoods={[]}
+          goalHistory={goals(2000)}
+          today={TODAY}
+          weights={weights}
+          targetWeight={170}
+        />,
+      )
+      const region = screen.getByRole('region', { name: 'Weight trend' })
+      const ref = region.querySelector('[data-testid="reference-line"]')
+      expect(ref).not.toBeNull()
+      expect(ref!.getAttribute('data-y')).toBe('170')
+    })
   })
 })

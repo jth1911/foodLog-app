@@ -8,6 +8,7 @@ import {
 } from './lib/nutrition'
 import { localStorageStore, type FoodLogStore } from './lib/foodLogRepo'
 import { seedFoodsFromJson, type UserFoodReference } from './lib/foods'
+import { type WeightEntry } from './lib/weight'
 import { isoWeekOf, weekdayOf } from './lib/dates'
 import { log } from './lib/logger'
 
@@ -97,6 +98,11 @@ export type FoodLog = {
   // The user-managed reference foods, keyed by category. Seeded from the static
   // JSON on first load, then the sole source of truth.
   foods: Record<string, UserFoodReference[]>
+  // The daily weight log, sorted ascending with carry-forward gaps materialised
+  // up to today (so a day without an explicit weigh-in still has a value).
+  weights: WeightEntry[]
+  // The target weight in pounds, or null when none has been set yet.
+  targetWeight: number | null
   addEntry: (entry: FoodEntry) => void
   // Append a batch of entries in one update, e.g. a CSV bulk import.
   addEntries: (entries: FoodEntry[]) => void
@@ -115,10 +121,17 @@ export type FoodLog = {
   deleteFood: (category: string, id: string) => void
   addCategory: (name: string) => void
   deleteCategory: (name: string) => void
+  // Record (or overwrite) the weight for a day. Editing an inherited day writes
+  // a real entry for it; the carry-forward fill is re-applied up to today.
+  setWeight: (date: string, lb: number) => void
+  // Set the single target weight (pounds).
+  setTargetWeight: (lb: number) => void
 }
 
 const byEffectiveDate = (a: GoalChange, b: GoalChange) =>
   a.effectiveDate.localeCompare(b.effectiveDate)
+
+const byWeightDate = (a: WeightEntry, b: WeightEntry) => a.date.localeCompare(b.date)
 
 // Resolve the initial goal history: a stored history wins; otherwise migrate a
 // legacy single goal into one epoch-dated entry; otherwise seed the defaults.
@@ -147,6 +160,15 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   const [foods, setFoods] = useState<Record<string, UserFoodReference[]>>(
     () => store.loadFoods() ?? seedFoodsFromJson(),
   )
+  // Start blank with no seeded weights. Only explicitly-recorded days are
+  // stored — there's no automatic carry-forward (the dashboard's "pull forward"
+  // button copies the previous day's weight on demand).
+  const [weights, setWeights] = useState<WeightEntry[]>(() =>
+    [...(store.loadWeights() ?? [])].sort(byWeightDate),
+  )
+  const [targetWeight, setTargetWeightState] = useState<number | null>(() =>
+    store.loadTargetWeight(),
+  )
 
   // Persist on every change, and on mount (which writes the initial seed/
   // migrated history back, so a later edited-to-one state isn't re-migrated).
@@ -159,6 +181,14 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   useEffect(() => {
     store.saveFoods(foods)
   }, [store, foods])
+  useEffect(() => {
+    store.saveWeights(weights)
+  }, [store, weights])
+  // Persist a target once one is set. There's no clearing in v1, so a null
+  // target (never set) simply leaves the key absent.
+  useEffect(() => {
+    if (targetWeight !== null) store.saveTargetWeight(targetWeight)
+  }, [store, targetWeight])
 
   const addEntry = useCallback((entry: FoodEntry) => {
     log('info', 'Entry added', { description: entry.description, date: entry.date })
@@ -239,10 +269,26 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
     })
   }, [])
 
+  // Upsert the day's weight (a re-entry replaces it), kept sorted by date. Only
+  // this day changes — other days are never auto-filled.
+  const setWeight = useCallback((date: string, lb: number) => {
+    log('info', 'Weight logged', { date, lb })
+    setWeights((prev) =>
+      [...prev.filter((w) => w.date !== date), { date, lb }].sort(byWeightDate),
+    )
+  }, [])
+
+  const setTargetWeight = useCallback((lb: number) => {
+    log('info', 'Target weight set', { lb })
+    setTargetWeightState(lb)
+  }, [])
+
   return {
     entries,
     goalHistory,
     foods,
+    weights,
+    targetWeight,
     addEntry,
     addEntries,
     updateEntry,
@@ -254,5 +300,7 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
     deleteFood,
     addCategory,
     deleteCategory,
+    setWeight,
+    setTargetWeight,
   }
 }

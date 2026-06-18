@@ -25,6 +25,7 @@ import {
   weekWindow,
 } from './lib/weekly'
 import { buildFoodCategoryIndex, type UserFoodReference } from './lib/foods'
+import { weightSeries, TREND_WINDOW, type WeightEntry } from './lib/weight'
 import { addDays, todayIso } from './lib/dates'
 
 // Meal colours mirror the meal headers elsewhere in the app (blue / green /
@@ -56,6 +57,19 @@ const MACRO_COLORS = {
   protein: '#16a34a',
   carbs: '#2563eb',
   fat: '#d97706',
+}
+
+// Weight line vs its smoothed trend, and the target reference line.
+const WEIGHT_COLOR = '#0f172a'
+const WEIGHT_TREND_COLOR = '#94a3b8'
+const TARGET_COLOR = '#dc2626'
+
+// A y-axis domain that snugly fits the weight values (and the target line when
+// set), padded a couple of pounds so the line isn't flush against the edges.
+// Falls back to a unit range when there's nothing to plot.
+function weightDomain(values: number[]): [number, number] {
+  if (values.length === 0) return [0, 1]
+  return [Math.floor(Math.min(...values) - 2), Math.ceil(Math.max(...values) + 2)]
 }
 
 // Short weekday + day-of-month tick label for the x-axes, formatted in UTC to
@@ -94,6 +108,11 @@ type WeeklyReportProps = {
   // entry's free-text description back to its food group for the protein pie.
   // Optional (defaults to empty) so callers/tests without a library still work.
   foods?: Record<string, UserFoodReference[]>
+  // The daily weight log (carry-forward already materialised) and the optional
+  // target weight, for the weight-trend chart. Default empty/null so callers and
+  // tests that don't care about weight still work.
+  weights?: WeightEntry[]
+  targetWeight?: number | null
   // The day the rolling window ends on. Defaults to the real current date;
   // injectable so tests pin a known day instead of the live clock.
   today?: string
@@ -119,11 +138,14 @@ function WeeklyReport({
   loggedFoods,
   goalHistory,
   foods = {},
+  weights = [],
+  targetWeight = null,
   today = todayIso(),
 }: WeeklyReportProps) {
   const [endDate, setEndDate] = useState(today)
 
   const dates = useMemo(() => weekWindow(endDate), [endDate])
+  const weightData = useMemo(() => weightSeries(weights, dates), [weights, dates])
   const macroData = useMemo(() => dailyMacroSeries(loggedFoods, dates), [loggedFoods, dates])
   const streak = useMemo(
     () => proteinStreak(loggedFoods, goalHistory, dates),
@@ -150,6 +172,11 @@ function WeeklyReport({
   const visibleSlices = mealData.filter((m) => m.calories > 0)
   const hasProtein = proteinSourceData.some((p) => p.protein > 0)
   const visibleProteinSlices = proteinSourceData.filter((p) => p.protein > 0)
+  const hasWeight = weightData.some((d) => d.lb != null)
+  const weightValues = weightData
+    .map((d) => d.lb)
+    .filter((v): v is number => v != null)
+  const yDomain = weightDomain(targetWeight != null ? [...weightValues, targetWeight] : weightValues)
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -186,6 +213,35 @@ function WeeklyReport({
       </header>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Weight trend: daily weight with a smoothed moving average + target */}
+        <section aria-label="Weight trend" className={`${cardClass} lg:col-span-2`}>
+          <h2 className="mb-1 text-lg font-semibold text-slate-900">Weight trend</h2>
+          <p className="mb-4 text-sm text-slate-500">
+            Daily weight (lb) with a {TREND_WINDOW}-day average
+            {targetWeight != null ? ` and your ${targetWeight} lb target` : ''}.
+          </p>
+          {hasWeight ? (
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={weightData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="date" tickFormatter={shortTick} fontSize={12} stroke="#94a3b8" />
+                  <YAxis domain={yDomain} fontSize={12} stroke="#94a3b8" allowDecimals={false} />
+                  <Tooltip labelFormatter={(iso) => shortTick(String(iso))} />
+                  <Legend />
+                  {targetWeight != null && (
+                    <ReferenceLine y={targetWeight} stroke={TARGET_COLOR} strokeDasharray="4 4" />
+                  )}
+                  <Line type="monotone" dataKey="lb" name="Weight" stroke={WEIGHT_COLOR} strokeWidth={2} dot={false} connectNulls />
+                  <Line type="monotone" dataKey="trend" name={`${TREND_WINDOW}-day avg`} stroke={WEIGHT_TREND_COLOR} strokeWidth={2} strokeDasharray="5 4" dot={false} connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="py-12 text-center text-sm text-slate-400">No weight logged this week.</p>
+          )}
+        </section>
+
         {/* Macro consistency: protein / carbs / fat across the 7 days */}
         <section aria-label="Macro consistency" className={`${cardClass} lg:col-span-2`}>
           <h2 className="mb-1 text-lg font-semibold text-slate-900">Macro consistency</h2>

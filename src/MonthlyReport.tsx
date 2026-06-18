@@ -1,5 +1,18 @@
 import { useMemo, useState } from 'react'
-import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
+import {
+  CartesianGrid,
+  Cell,
+  Legend,
+  Line,
+  LineChart,
+  Pie,
+  PieChart,
+  ReferenceLine,
+  ResponsiveContainer,
+  Tooltip,
+  XAxis,
+  YAxis,
+} from 'recharts'
 import { type FoodEntry, type GoalChange } from './lib/nutrition'
 import {
   macroHeatmap,
@@ -8,6 +21,7 @@ import {
   type BandStatus,
   type HeatmapDay,
 } from './lib/monthly'
+import { weightSeries, TREND_WINDOW, type WeightEntry } from './lib/weight'
 import { addMonths, monthDays, startOfMonth, todayIso } from './lib/dates'
 
 // A heatmap's presentation. The band classification (under/in-range/over) is
@@ -68,6 +82,19 @@ const MACRO_LABELS: Record<'protein' | 'carbs' | 'fat', string> = {
   protein: 'Protein',
   carbs: 'Carbs',
   fat: 'Fat',
+}
+
+// Weight line vs its smoothed trend, and the target reference line. Mirrors the
+// Weekly report so the weight charts read the same across both views.
+const WEIGHT_COLOR = '#0f172a'
+const WEIGHT_TREND_COLOR = '#94a3b8'
+const TARGET_COLOR = '#dc2626'
+
+// A y-axis domain that snugly fits the weight values (and the target line when
+// set), padded a couple of pounds. Falls back to a unit range when empty.
+function weightDomain(values: number[]): [number, number] {
+  if (values.length === 0) return [0, 1]
+  return [Math.floor(Math.min(...values) - 2), Math.ceil(Math.max(...values) + 2)]
 }
 
 // Monday-first weekday headers for the calendar grid.
@@ -164,6 +191,11 @@ function renderSliceLabel(props: { name?: string; percent?: number }): string {
 type MonthlyReportProps = {
   loggedFoods: FoodEntry[]
   goalHistory: GoalChange[]
+  // The daily weight log (carry-forward already materialised) and the optional
+  // target weight, for the weight-trend chart. Default empty/null so callers and
+  // tests that don't care about weight still work.
+  weights?: WeightEntry[]
+  targetWeight?: number | null
   // The month to land on (any day within it). Defaults to the real current
   // month; injectable so tests pin a known month instead of the live clock.
   today?: string
@@ -179,11 +211,18 @@ const cardClass = 'rounded-xl border border-slate-200 bg-white p-5 shadow-sm'
  * judged against the goal in effect on that day, so editing goals on the Goals
  * tab flows through.
  */
-function MonthlyReport({ loggedFoods, goalHistory, today = todayIso() }: MonthlyReportProps) {
+function MonthlyReport({
+  loggedFoods,
+  goalHistory,
+  weights = [],
+  targetWeight = null,
+  today = todayIso(),
+}: MonthlyReportProps) {
   const currentMonth = startOfMonth(today)
   const [month, setMonth] = useState(currentMonth)
 
   const dates = useMemo(() => monthDays(month), [month])
+  const weightData = useMemo(() => weightSeries(weights, dates), [weights, dates])
   const calorieDays = useMemo(
     () => macroHeatmap(loggedFoods, goalHistory, dates, 'calories'),
     [loggedFoods, goalHistory, dates],
@@ -200,6 +239,9 @@ function MonthlyReport({ loggedFoods, goalHistory, today = todayIso() }: Monthly
   const leadingBlanks = dates.length > 0 ? weekdayIndex(dates[0]) : 0
   const hasMacros = macroData.some((m) => m.grams > 0)
   const visibleMacros = macroData.filter((m) => m.grams > 0)
+  const hasWeight = weightData.some((d) => d.lb != null)
+  const weightValues = weightData.map((d) => d.lb).filter((v): v is number => v != null)
+  const yDomain = weightDomain(targetWeight != null ? [...weightValues, targetWeight] : weightValues)
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
@@ -237,6 +279,40 @@ function MonthlyReport({ loggedFoods, goalHistory, today = todayIso() }: Monthly
       </header>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+        {/* Weight trend across the month, with a smoothed average + target */}
+        <section aria-label="Weight trend" className={`${cardClass} lg:col-span-2`}>
+          <h2 className="mb-1 text-lg font-semibold text-slate-900">Weight trend</h2>
+          <p className="mb-4 text-sm text-slate-500">
+            Daily weight (lb) with a {TREND_WINDOW}-day average
+            {targetWeight != null ? ` and your ${targetWeight} lb target` : ''}.
+          </p>
+          {hasWeight ? (
+            <div className="h-72 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={weightData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis
+                    dataKey="date"
+                    tickFormatter={(iso) => String(dayOfMonth(String(iso)))}
+                    fontSize={12}
+                    stroke="#94a3b8"
+                  />
+                  <YAxis domain={yDomain} fontSize={12} stroke="#94a3b8" allowDecimals={false} />
+                  <Tooltip labelFormatter={(iso) => String(iso)} />
+                  <Legend />
+                  {targetWeight != null && (
+                    <ReferenceLine y={targetWeight} stroke={TARGET_COLOR} strokeDasharray="4 4" />
+                  )}
+                  <Line type="monotone" dataKey="lb" name="Weight" stroke={WEIGHT_COLOR} strokeWidth={2} dot={false} connectNulls />
+                  <Line type="monotone" dataKey="trend" name={`${TREND_WINDOW}-day avg`} stroke={WEIGHT_TREND_COLOR} strokeWidth={2} strokeDasharray="5 4" dot={false} connectNulls />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="py-12 text-center text-sm text-slate-400">No weight logged this month.</p>
+          )}
+        </section>
+
         {/* Calorie & protein ceiling/floor heatmaps */}
         <HeatmapCard days={calorieDays} leadingBlanks={leadingBlanks} config={CALORIE_HEATMAP} />
         <HeatmapCard days={proteinDays} leadingBlanks={leadingBlanks} config={PROTEIN_HEATMAP} />

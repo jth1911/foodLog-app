@@ -3,6 +3,7 @@ import { act, renderHook } from '@testing-library/react'
 import { useFoodLog, SEED_FOODS } from './useFoodLog'
 import type { FoodLogStore } from './lib/foodLogRepo'
 import { seedFoodsFromJson, type UserFoodReference } from './lib/foods'
+import { type WeightEntry } from './lib/weight'
 import { DEFAULT_GOALS, GOALS_EPOCH, type FoodEntry, type GoalChange, type Goals } from './lib/nutrition'
 
 const makeEntry = (id: string): FoodEntry => ({
@@ -28,6 +29,8 @@ function makeFakeStore(
   history: GoalChange[] | null = null,
   legacy: Goals | null = null,
   foods: Record<string, UserFoodReference[]> | null = null,
+  weights: WeightEntry[] | null = null,
+  targetWeight: number | null = null,
 ): FoodLogStore {
   return {
     loadEntries: () => entries,
@@ -41,6 +44,14 @@ function makeFakeStore(
     loadFoods: () => foods,
     saveFoods: (next) => {
       foods = next
+    },
+    loadWeights: () => weights,
+    saveWeights: (next) => {
+      weights = next
+    },
+    loadTargetWeight: () => targetWeight,
+    saveTargetWeight: (next) => {
+      targetWeight = next
     },
     loadLegacyGoals: () => legacy,
   }
@@ -247,6 +258,74 @@ describe('useFoodLog — reference foods', () => {
     const { result } = renderHook(() => useFoodLog(store))
     act(() => result.current.addCategory('Extra'))
     expect(store.loadFoods()).toHaveProperty('Extra')
+  })
+})
+
+describe('useFoodLog — weights', () => {
+  it('loads a stored weight log sorted by date, without inventing days', () => {
+    const stored: WeightEntry[] = [
+      { date: '2026-06-04', lb: 179 },
+      { date: '2026-06-01', lb: 180 },
+    ]
+    const { result } = renderHook(() => useFoodLog(makeFakeStore(null, null, null, null, stored)))
+    // Only the two recorded days exist (no carry-forward fill), sorted ascending.
+    expect(result.current.weights).toEqual([
+      { date: '2026-06-01', lb: 180 },
+      { date: '2026-06-04', lb: 179 },
+    ])
+  })
+
+  it('starts with an empty weight log when storage is empty', () => {
+    const { result } = renderHook(() => useFoodLog(makeFakeStore()))
+    expect(result.current.weights).toEqual([])
+  })
+
+  it('upserts a single day without auto-filling the gaps', () => {
+    const stored: WeightEntry[] = [{ date: '2026-06-01', lb: 180 }]
+    const { result } = renderHook(() => useFoodLog(makeFakeStore(null, null, null, null, stored)))
+
+    act(() => result.current.setWeight('2026-06-03', 178))
+    const onDate = (d: string) => result.current.weights.find((w) => w.date === d)
+    expect(onDate('2026-06-02')).toBeUndefined() // no carried day invented
+    expect(onDate('2026-06-03')).toEqual({ date: '2026-06-03', lb: 178 })
+    expect(result.current.weights).toHaveLength(2)
+
+    // Re-entering the same day overwrites it rather than duplicating.
+    act(() => result.current.setWeight('2026-06-03', 177))
+    expect(result.current.weights.filter((w) => w.date === '2026-06-03')).toHaveLength(1)
+    expect(onDate('2026-06-03')!.lb).toBe(177)
+  })
+
+  it('saves the weight log to the store on change', () => {
+    const store = makeFakeStore(null, null, null, null, [{ date: '2026-06-01', lb: 180 }])
+    const { result } = renderHook(() => useFoodLog(store))
+    act(() => result.current.setWeight('2026-06-02', 179))
+    expect(store.loadWeights()!.find((w) => w.date === '2026-06-02')).toEqual({
+      date: '2026-06-02',
+      lb: 179,
+    })
+  })
+})
+
+describe('useFoodLog — target weight', () => {
+  it('defaults to null when no target is stored', () => {
+    const { result } = renderHook(() => useFoodLog(makeFakeStore()))
+    expect(result.current.targetWeight).toBeNull()
+  })
+
+  it('loads a stored target weight', () => {
+    const { result } = renderHook(() =>
+      useFoodLog(makeFakeStore(null, null, null, null, null, 165)),
+    )
+    expect(result.current.targetWeight).toBe(165)
+  })
+
+  it('sets and persists the target weight', () => {
+    const store = makeFakeStore()
+    const { result } = renderHook(() => useFoodLog(store))
+    act(() => result.current.setTargetWeight(170))
+    expect(result.current.targetWeight).toBe(170)
+    expect(store.loadTargetWeight()).toBe(170)
   })
 })
 
