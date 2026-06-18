@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest'
-import { render, screen } from '@testing-library/react'
+import { render, screen, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import WeeklyReport from './WeeklyReport'
 import { GOALS_EPOCH, type FoodEntry, type GoalChange } from './lib/nutrition'
@@ -203,5 +203,74 @@ describe('WeeklyReport', () => {
     expect(byCategory['Other']).toBe(10)
     // Empty groups are filtered out of the pie's data.
     expect(byCategory['Seafood']).toBeUndefined()
+  })
+
+  describe('fluid intake', () => {
+    const fluid = (date: string, oz: number) => ({
+      id: crypto.randomUUID(),
+      date,
+      week: isoWeekOf(date),
+      weekday: weekdayOf(date),
+      drinkType: 'Water' as const,
+      oz,
+      calories: 0,
+    })
+
+    it('shows an empty state when no fluid is logged this week', () => {
+      render(<WeeklyReport loggedFoods={[]} goalHistory={goals} today={TODAY} fluids={[]} />)
+      expect(screen.getByText('No fluid logged this week.')).toBeInTheDocument()
+    })
+
+    it('feeds the fluid chart one oz total per day across the window', () => {
+      const fluids = [fluid('2026-06-16', 16), fluid('2026-06-16', 8), fluid(TODAY, 24)]
+      render(<WeeklyReport loggedFoods={[]} goalHistory={goals} today={TODAY} fluids={fluids} />)
+      const data = chartDataIn('Fluid intake') as { date: string; oz: number }[]
+      expect(data).toHaveLength(7)
+      expect(data.find((d) => d.date === '2026-06-16')!.oz).toBe(24)
+      expect(data.find((d) => d.date === TODAY)!.oz).toBe(24)
+      expect(data.find((d) => d.date === '2026-06-15')!.oz).toBe(0)
+    })
+
+    it('renders the target reference line on the fluid chart when set', () => {
+      const fluids = [fluid(TODAY, 24)]
+      render(
+        <WeeklyReport
+          loggedFoods={[]}
+          goalHistory={goals}
+          today={TODAY}
+          fluids={fluids}
+          targetFluid={64}
+        />,
+      )
+      const region = screen.getByRole('region', { name: 'Fluid intake' })
+      const ref = region.querySelector('[data-testid="reference-line"]')
+      expect(ref!.getAttribute('data-y')).toBe('64')
+    })
+
+    it('splits the by-type chart into one oz field per drink type per day', () => {
+      const drink = (date: string, drinkType: 'Water' | 'Coffee' | 'Tea', oz: number) => ({
+        id: crypto.randomUUID(),
+        date,
+        week: isoWeekOf(date),
+        weekday: weekdayOf(date),
+        drinkType,
+        oz,
+        calories: 0,
+      })
+      const fluids = [drink(TODAY, 'Water', 16), drink(TODAY, 'Coffee', 12), drink('2026-06-16', 'Tea', 8)]
+      render(<WeeklyReport loggedFoods={[]} goalHistory={goals} today={TODAY} fluids={fluids} />)
+      const data = chartDataIn('Fluid by type') as Array<Record<string, number | string>>
+      const today = data.find((d) => d.date === TODAY)!
+      expect(today.Water).toBe(16)
+      expect(today.Coffee).toBe(12)
+      expect(today.Tea).toBe(0)
+      expect(data.find((d) => d.date === '2026-06-16')!.Tea).toBe(8)
+    })
+
+    it('shows an empty state for the by-type chart when no fluid is logged', () => {
+      render(<WeeklyReport loggedFoods={[]} goalHistory={goals} today={TODAY} fluids={[]} />)
+      const region = screen.getByRole('region', { name: 'Fluid by type' })
+      expect(within(region).getByText(/no fluid logged this week/i)).toBeInTheDocument()
+    })
   })
 })

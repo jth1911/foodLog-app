@@ -3,6 +3,7 @@ import { render, screen, fireEvent, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import Dashboard, { DashboardView } from './Dashboard'
 import { DEFAULT_GOALS, GOALS_EPOCH, type FoodEntry, type GoalChange } from './lib/nutrition'
+import { type FluidEntry } from './lib/fluid'
 
 // The five seeded example entries live on this fixed day; pinning `today` to it
 // lands the dashboard on the seeded content so these assertions stay deterministic.
@@ -353,6 +354,125 @@ describe('Dashboard', () => {
       // Step back across the 2026-05-01 boundary → the earlier 120 goal applies.
       fireEvent.click(screen.getByRole('button', { name: 'Previous day' }))
       expect(protein).toHaveTextContent('/ 120')
+    })
+  })
+
+  describe('fluids', () => {
+    afterEach(() => vi.restoreAllMocks())
+
+    it('adds a drink via the modal, showing it with its oz total', async () => {
+      const user = userEvent.setup()
+      renderSeeded()
+
+      await user.click(screen.getByRole('button', { name: 'Add drink' }))
+      await user.selectOptions(screen.getByLabelText('Drink type'), 'Juice')
+      await user.type(screen.getByLabelText('Amount (fl oz)'), '8')
+      await user.type(screen.getByLabelText('Calories'), '110')
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+
+      const fluidLog = screen.getByRole('region', { name: 'Fluids' })
+      expect(within(fluidLog).getByText('Juice')).toBeInTheDocument()
+      expect(within(fluidLog).getByLabelText('Fluid total')).toHaveTextContent('8')
+    })
+
+    it('rolls a caloric drink into the day’s calorie total', async () => {
+      const user = userEvent.setup()
+      renderSeeded()
+
+      // Seeded calories are 1435. Adding a 110 kcal juice → 1545.
+      await user.click(screen.getByRole('button', { name: 'Add drink' }))
+      await user.selectOptions(screen.getByLabelText('Drink type'), 'Juice')
+      await user.type(screen.getByLabelText('Amount (fl oz)'), '8')
+      await user.type(screen.getByLabelText('Calories'), '110')
+      await user.click(screen.getByRole('button', { name: 'Add' }))
+
+      expect(screen.getByLabelText('Calories consumed')).toHaveTextContent('1545')
+    })
+
+    it('shows the day’s drinks and goal progress from supplied props', () => {
+      const fluids: FluidEntry[] = [
+        { id: 'd1', date: '2026-05-01', week: 18, weekday: 'Friday', drinkType: 'Water', oz: 16, calories: 0 },
+        { id: 'd2', date: '2026-05-01', week: 18, weekday: 'Friday', drinkType: 'Coffee', oz: 12, calories: 5 },
+      ]
+      render(
+        <DashboardView
+          today="2026-05-01"
+          loggedFoods={[]}
+          goalHistory={[{ effectiveDate: GOALS_EPOCH, goals: DEFAULT_GOALS }]}
+          weights={[]}
+          addEntry={() => {}}
+          addEntries={() => {}}
+          deleteEntry={() => {}}
+          updateEntry={() => {}}
+          setWeight={() => {}}
+          fluids={fluids}
+          targetFluid={64}
+        />,
+      )
+      const fluidLog = screen.getByRole('region', { name: 'Fluids' })
+      expect(within(fluidLog).getByLabelText('Fluid total')).toHaveTextContent('28')
+      expect(within(fluidLog).getByLabelText('Fluid total').closest('p')!).toHaveTextContent('/ 64')
+      // The coffee's 5 kcal rolls into the (otherwise empty) day's calorie total.
+      expect(screen.getByLabelText('Calories consumed')).toHaveTextContent('5')
+    })
+
+    it('edits a drink in place', async () => {
+      const user = userEvent.setup()
+      const updateFluid = vi.fn()
+      const fluids: FluidEntry[] = [
+        { id: 'd1', date: '2026-05-01', week: 18, weekday: 'Friday', drinkType: 'Soda', oz: 12, calories: 150 },
+      ]
+      render(
+        <DashboardView
+          today="2026-05-01"
+          loggedFoods={[]}
+          goalHistory={[{ effectiveDate: GOALS_EPOCH, goals: DEFAULT_GOALS }]}
+          weights={[]}
+          addEntry={() => {}}
+          addEntries={() => {}}
+          deleteEntry={() => {}}
+          updateEntry={() => {}}
+          setWeight={() => {}}
+          fluids={fluids}
+          targetFluid={64}
+          updateFluid={updateFluid}
+        />,
+      )
+
+      await user.click(screen.getByRole('button', { name: 'Edit Soda 12 fl oz' }))
+      const dialog = screen.getByRole('dialog', { name: 'Edit drink' })
+      fireEvent.change(within(dialog).getByLabelText('Amount (fl oz)'), { target: { value: '20' } })
+      await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+
+      expect(updateFluid).toHaveBeenCalledTimes(1)
+      expect(updateFluid.mock.calls[0][0]).toMatchObject({ id: 'd1', oz: 20, drinkType: 'Soda' })
+    })
+
+    it('deletes a drink after confirmation', () => {
+      vi.spyOn(window, 'confirm').mockReturnValue(true)
+      const deleteFluid = vi.fn()
+      const fluids: FluidEntry[] = [
+        { id: 'd1', date: '2026-05-01', week: 18, weekday: 'Friday', drinkType: 'Water', oz: 16, calories: 0 },
+      ]
+      render(
+        <DashboardView
+          today="2026-05-01"
+          loggedFoods={[]}
+          goalHistory={[{ effectiveDate: GOALS_EPOCH, goals: DEFAULT_GOALS }]}
+          weights={[]}
+          addEntry={() => {}}
+          addEntries={() => {}}
+          deleteEntry={() => {}}
+          updateEntry={() => {}}
+          setWeight={() => {}}
+          fluids={fluids}
+          targetFluid={64}
+          deleteFluid={deleteFluid}
+        />,
+      )
+
+      fireEvent.click(screen.getByRole('button', { name: 'Delete Water 16 fl oz' }))
+      expect(deleteFluid).toHaveBeenCalledWith('d1')
     })
   })
 

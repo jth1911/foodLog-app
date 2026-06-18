@@ -11,7 +11,7 @@ const history: GoalChange[] = [
 
 describe('GoalsPage', () => {
   it('lists entries newest-first', () => {
-    render(<GoalsPage goalHistory={history} onAdd={() => {}} onDelete={() => {}} targetWeight={null} onSetTargetWeight={() => {}} />)
+    render(<GoalsPage goalHistory={history} onAdd={() => {}} onDelete={() => {}} targetWeight={null} onSetTargetWeight={() => {}} targetFluid={null} onSetTargetFluid={() => {}} />)
     const rows = screen.getByRole('region', { name: 'Goal history' })
     const labels = within(rows)
       .getAllByText(/Initial goal|May 2026/)
@@ -21,14 +21,14 @@ describe('GoalsPage', () => {
   })
 
   it('labels the sentinel-dated entry as the initial goal', () => {
-    render(<GoalsPage goalHistory={history} onAdd={() => {}} onDelete={() => {}} targetWeight={null} onSetTargetWeight={() => {}} />)
+    render(<GoalsPage goalHistory={history} onAdd={() => {}} onDelete={() => {}} targetWeight={null} onSetTargetWeight={() => {}} targetFluid={null} onSetTargetFluid={() => {}} />)
     expect(screen.getByText('Initial goal')).toBeInTheDocument()
   })
 
   it('calls onDelete with the entry effective date', async () => {
     const onDelete = vi.fn()
     const user = userEvent.setup()
-    render(<GoalsPage goalHistory={history} onAdd={() => {}} onDelete={onDelete} targetWeight={null} onSetTargetWeight={() => {}} />)
+    render(<GoalsPage goalHistory={history} onAdd={() => {}} onDelete={onDelete} targetWeight={null} onSetTargetWeight={() => {}} targetFluid={null} onSetTargetFluid={() => {}} />)
 
     await user.click(screen.getByRole('button', { name: /Delete goal change 1 May 2026/ }))
     expect(onDelete).toHaveBeenCalledWith('2026-05-01')
@@ -36,7 +36,7 @@ describe('GoalsPage', () => {
 
   it('disables delete when only one entry remains', () => {
     const single: GoalChange[] = [{ effectiveDate: GOALS_EPOCH, goals: DEFAULT_GOALS }]
-    render(<GoalsPage goalHistory={single} onAdd={() => {}} onDelete={() => {}} targetWeight={null} onSetTargetWeight={() => {}} />)
+    render(<GoalsPage goalHistory={single} onAdd={() => {}} onDelete={() => {}} targetWeight={null} onSetTargetWeight={() => {}} targetFluid={null} onSetTargetFluid={() => {}} />)
     expect(screen.getByRole('button', { name: /Delete goal change/ })).toBeDisabled()
   })
 
@@ -50,6 +50,8 @@ describe('GoalsPage', () => {
         onDelete={() => {}}
         targetWeight={null}
         onSetTargetWeight={() => {}}
+        targetFluid={null}
+        onSetTargetFluid={() => {}}
         today="2026-06-17"
       />,
     )
@@ -80,6 +82,8 @@ describe('GoalsPage', () => {
         onDelete={() => {}}
         targetWeight={null}
         onSetTargetWeight={() => {}}
+        targetFluid={null}
+        onSetTargetFluid={() => {}}
         today="2026-06-17"
       />,
     )
@@ -104,6 +108,8 @@ describe('GoalsPage', () => {
           onDelete={() => {}}
           targetWeight={165}
           onSetTargetWeight={() => {}}
+          targetFluid={null}
+          onSetTargetFluid={() => {}}
         />,
       )
       expect(screen.getByLabelText('Target weight (lb)')).toHaveValue(165)
@@ -119,6 +125,8 @@ describe('GoalsPage', () => {
           onDelete={() => {}}
           targetWeight={null}
           onSetTargetWeight={onSetTargetWeight}
+          targetFluid={null}
+          onSetTargetFluid={() => {}}
         />,
       )
 
@@ -138,6 +146,8 @@ describe('GoalsPage', () => {
           onDelete={() => {}}
           targetWeight={null}
           onSetTargetWeight={onSetTargetWeight}
+          targetFluid={null}
+          onSetTargetFluid={() => {}}
         />,
       )
 
@@ -145,6 +155,66 @@ describe('GoalsPage', () => {
       await user.type(screen.getByLabelText('Target weight (lb)'), '-5')
       await user.click(within(region).getByRole('button', { name: 'Save' }))
       expect(onSetTargetWeight).not.toHaveBeenCalled()
+      expect(within(region).getByRole('alert')).toHaveTextContent(/greater than zero/i)
+    })
+  })
+
+  describe('target fluid', () => {
+    it('pre-fills the input with the stored target fluid', () => {
+      render(
+        <GoalsPage
+          goalHistory={history}
+          onAdd={() => {}}
+          onDelete={() => {}}
+          targetWeight={null}
+          onSetTargetWeight={() => {}}
+          targetFluid={64}
+          onSetTargetFluid={() => {}}
+        />,
+      )
+      expect(screen.getByLabelText('Target fluid (fl oz)')).toHaveValue(64)
+    })
+
+    it('saves an entered target fluid', async () => {
+      const onSetTargetFluid = vi.fn()
+      const user = userEvent.setup()
+      render(
+        <GoalsPage
+          goalHistory={history}
+          onAdd={() => {}}
+          onDelete={() => {}}
+          targetWeight={null}
+          onSetTargetWeight={() => {}}
+          targetFluid={null}
+          onSetTargetFluid={onSetTargetFluid}
+        />,
+      )
+
+      const region = screen.getByRole('region', { name: 'Target fluid' })
+      await user.type(screen.getByLabelText('Target fluid (fl oz)'), '80')
+      await user.click(within(region).getByRole('button', { name: 'Save' }))
+      expect(onSetTargetFluid).toHaveBeenCalledWith(80)
+    })
+
+    it('rejects a non-positive target fluid', async () => {
+      const onSetTargetFluid = vi.fn()
+      const user = userEvent.setup()
+      render(
+        <GoalsPage
+          goalHistory={history}
+          onAdd={() => {}}
+          onDelete={() => {}}
+          targetWeight={null}
+          onSetTargetWeight={() => {}}
+          targetFluid={null}
+          onSetTargetFluid={onSetTargetFluid}
+        />,
+      )
+
+      const region = screen.getByRole('region', { name: 'Target fluid' })
+      await user.type(screen.getByLabelText('Target fluid (fl oz)'), '-5')
+      await user.click(within(region).getByRole('button', { name: 'Save' }))
+      expect(onSetTargetFluid).not.toHaveBeenCalled()
       expect(within(region).getByRole('alert')).toHaveTextContent(/greater than zero/i)
     })
   })

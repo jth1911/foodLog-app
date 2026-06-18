@@ -4,6 +4,7 @@ import { useFoodLog, SEED_FOODS } from './useFoodLog'
 import type { FoodLogStore } from './lib/foodLogRepo'
 import { seedFoodsFromJson, type UserFoodReference } from './lib/foods'
 import { type WeightEntry } from './lib/weight'
+import { type FluidEntry } from './lib/fluid'
 import { DEFAULT_GOALS, GOALS_EPOCH, type FoodEntry, type GoalChange, type Goals } from './lib/nutrition'
 
 const makeEntry = (id: string): FoodEntry => ({
@@ -31,6 +32,8 @@ function makeFakeStore(
   foods: Record<string, UserFoodReference[]> | null = null,
   weights: WeightEntry[] | null = null,
   targetWeight: number | null = null,
+  fluids: FluidEntry[] | null = null,
+  targetFluid: number | null = null,
 ): FoodLogStore {
   return {
     loadEntries: () => entries,
@@ -53,9 +56,28 @@ function makeFakeStore(
     saveTargetWeight: (next) => {
       targetWeight = next
     },
+    loadFluids: () => fluids,
+    saveFluids: (next) => {
+      fluids = next
+    },
+    loadTargetFluid: () => targetFluid,
+    saveTargetFluid: (next) => {
+      targetFluid = next
+    },
     loadLegacyGoals: () => legacy,
   }
 }
+
+const makeFluid = (id: string, over: Partial<FluidEntry> = {}): FluidEntry => ({
+  id,
+  date: '2026-06-17',
+  week: 25,
+  weekday: 'Wednesday',
+  drinkType: 'Water',
+  oz: 16,
+  calories: 0,
+  ...over,
+})
 
 describe('useFoodLog — seeding', () => {
   it('seeds the demo entries and a default goal history when storage is empty', () => {
@@ -326,6 +348,59 @@ describe('useFoodLog — target weight', () => {
     act(() => result.current.setTargetWeight(170))
     expect(result.current.targetWeight).toBe(170)
     expect(store.loadTargetWeight()).toBe(170)
+  })
+})
+
+describe('useFoodLog — fluids', () => {
+  it('starts blank with no seeded drinks when storage is empty', () => {
+    const { result } = renderHook(() => useFoodLog(makeFakeStore()))
+    expect(result.current.fluids).toEqual([])
+  })
+
+  it('loads a stored fluid log', () => {
+    const stored = [makeFluid('d1')]
+    const { result } = renderHook(() =>
+      useFoodLog(makeFakeStore(null, null, null, null, null, null, stored)),
+    )
+    expect(result.current.fluids).toEqual(stored)
+  })
+
+  it('adds, updates and deletes drinks, persisting each change', () => {
+    const store = makeFakeStore()
+    const { result } = renderHook(() => useFoodLog(store))
+
+    act(() => result.current.addFluid(makeFluid('d1', { drinkType: 'Juice', oz: 8, calories: 110 })))
+    expect(result.current.fluids).toHaveLength(1)
+    expect(store.loadFluids()).toHaveLength(1)
+
+    act(() => result.current.updateFluid(makeFluid('d1', { drinkType: 'Soda', oz: 12, calories: 150 })))
+    expect(result.current.fluids[0]).toMatchObject({ drinkType: 'Soda', oz: 12, calories: 150 })
+
+    act(() => result.current.deleteFluid('d1'))
+    expect(result.current.fluids).toEqual([])
+    expect(store.loadFluids()).toEqual([])
+  })
+})
+
+describe('useFoodLog — target fluid', () => {
+  it('defaults to 95 fl oz when no target is stored', () => {
+    const { result } = renderHook(() => useFoodLog(makeFakeStore()))
+    expect(result.current.targetFluid).toBe(95)
+  })
+
+  it('loads a stored target fluid', () => {
+    const { result } = renderHook(() =>
+      useFoodLog(makeFakeStore(null, null, null, null, null, null, null, 64)),
+    )
+    expect(result.current.targetFluid).toBe(64)
+  })
+
+  it('sets and persists the target fluid', () => {
+    const store = makeFakeStore()
+    const { result } = renderHook(() => useFoodLog(store))
+    act(() => result.current.setTargetFluid(80))
+    expect(result.current.targetFluid).toBe(80)
+    expect(store.loadTargetFluid()).toBe(80)
   })
 })
 

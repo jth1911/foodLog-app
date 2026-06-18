@@ -26,6 +26,13 @@ import {
 } from './lib/weekly'
 import { buildFoodCategoryIndex, type UserFoodReference } from './lib/foods'
 import { weightSeries, TREND_WINDOW, type WeightEntry } from './lib/weight'
+import {
+  fluidSeries,
+  fluidByTypeSeries,
+  activeDrinkTypes,
+  type DrinkType,
+  type FluidEntry,
+} from './lib/fluid'
 import { addDays, todayIso } from './lib/dates'
 
 // Meal colours mirror the meal headers elsewhere in the app (blue / green /
@@ -63,6 +70,21 @@ const MACRO_COLORS = {
 const WEIGHT_COLOR = '#0f172a'
 const WEIGHT_TREND_COLOR = '#94a3b8'
 const TARGET_COLOR = '#dc2626'
+
+// Fluid-intake bars: a hydration-blue fill, hitting the goal turns them deeper.
+const FLUID_COLOR = '#0ea5e9'
+const FLUID_MET_COLOR = '#0369a1'
+
+// A distinct hue per drink type for the by-type comparison lines.
+const DRINK_COLORS: Record<DrinkType, string> = {
+  Water: '#0ea5e9',
+  Coffee: '#92400e',
+  Tea: '#16a34a',
+  Juice: '#f59e0b',
+  Soda: '#dc2626',
+  Milk: '#64748b',
+  Other: '#9333ea',
+}
 
 // A y-axis domain that snugly fits the weight values (and the target line when
 // set), padded a couple of pounds so the line isn't flush against the edges.
@@ -113,6 +135,10 @@ type WeeklyReportProps = {
   // tests that don't care about weight still work.
   weights?: WeightEntry[]
   targetWeight?: number | null
+  // The daily fluid log and the optional daily fluid target, for the fluid-intake
+  // chart. Default empty/null so callers that don't track fluids still work.
+  fluids?: FluidEntry[]
+  targetFluid?: number | null
   // The day the rolling window ends on. Defaults to the real current date;
   // injectable so tests pin a known day instead of the live clock.
   today?: string
@@ -140,12 +166,16 @@ function WeeklyReport({
   foods = {},
   weights = [],
   targetWeight = null,
+  fluids = [],
+  targetFluid = null,
   today = todayIso(),
 }: WeeklyReportProps) {
   const [endDate, setEndDate] = useState(today)
 
   const dates = useMemo(() => weekWindow(endDate), [endDate])
   const weightData = useMemo(() => weightSeries(weights, dates), [weights, dates])
+  const fluidData = useMemo(() => fluidSeries(fluids, dates), [fluids, dates])
+  const fluidTypeData = useMemo(() => fluidByTypeSeries(fluids, dates), [fluids, dates])
   const macroData = useMemo(() => dailyMacroSeries(loggedFoods, dates), [loggedFoods, dates])
   const streak = useMemo(
     () => proteinStreak(loggedFoods, goalHistory, dates),
@@ -172,6 +202,8 @@ function WeeklyReport({
   const visibleSlices = mealData.filter((m) => m.calories > 0)
   const hasProtein = proteinSourceData.some((p) => p.protein > 0)
   const visibleProteinSlices = proteinSourceData.filter((p) => p.protein > 0)
+  const hasFluid = fluidData.some((d) => d.oz > 0)
+  const activeTypes = activeDrinkTypes(fluidTypeData)
   const hasWeight = weightData.some((d) => d.lb != null)
   const weightValues = weightData
     .map((d) => d.lb)
@@ -313,6 +345,82 @@ function WeeklyReport({
               </BarChart>
             </ResponsiveContainer>
           </div>
+        </section>
+
+        {/* Daily fluid intake vs the hydration goal */}
+        <section aria-label="Fluid intake" className={cardClass}>
+          <h2 className="mb-1 text-lg font-semibold text-slate-900">Fluid intake</h2>
+          <p className="mb-4 text-sm text-slate-500">
+            Daily fluid (fl oz)
+            {targetFluid != null ? ` against your ${targetFluid} fl oz target` : ''}.
+          </p>
+          {hasFluid ? (
+            <div className="h-56 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <BarChart data={fluidData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="date" tickFormatter={shortTick} fontSize={12} stroke="#94a3b8" />
+                  <YAxis fontSize={12} stroke="#94a3b8" />
+                  <Tooltip
+                    labelFormatter={(iso) => shortTick(String(iso))}
+                    formatter={(value) => [`${value} fl oz`, 'Fluid']}
+                  />
+                  {targetFluid != null && (
+                    <ReferenceLine y={targetFluid} stroke={FLUID_MET_COLOR} strokeDasharray="4 4" />
+                  )}
+                  <Bar dataKey="oz" name="Fluid" radius={[4, 4, 0, 0]}>
+                    {fluidData.map((day) => (
+                      <Cell
+                        key={day.date}
+                        fill={targetFluid != null && day.oz >= targetFluid ? FLUID_MET_COLOR : FLUID_COLOR}
+                      />
+                    ))}
+                  </Bar>
+                </BarChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="py-12 text-center text-sm text-slate-400">No fluid logged this week.</p>
+          )}
+        </section>
+
+        {/* Fluid by type: one line per drink type, to compare water/coffee/tea/… */}
+        <section aria-label="Fluid by type" className={cardClass}>
+          <h2 className="mb-1 text-lg font-semibold text-slate-900">Fluid by type</h2>
+          <p className="mb-4 text-sm text-slate-500">
+            Daily fl oz per drink type — compare water vs coffee vs tea and the rest.
+          </p>
+          {activeTypes.length > 0 ? (
+            <div className="h-56 w-full">
+              <ResponsiveContainer width="100%" height="100%">
+                <LineChart data={fluidTypeData} margin={{ top: 5, right: 10, bottom: 5, left: -10 }}>
+                  <CartesianGrid strokeDasharray="3 3" stroke="#e2e8f0" />
+                  <XAxis dataKey="date" tickFormatter={shortTick} fontSize={12} stroke="#94a3b8" />
+                  <YAxis fontSize={12} stroke="#94a3b8" />
+                  <Tooltip
+                    labelFormatter={(iso) => shortTick(String(iso))}
+                    formatter={(value, name) => [`${value} fl oz`, name]}
+                  />
+                  <Legend />
+                  {activeTypes.map((type) => (
+                    <Line
+                      key={type}
+                      type="monotone"
+                      dataKey={type}
+                      name={type}
+                      stroke={DRINK_COLORS[type]}
+                      strokeWidth={2}
+                      dot={false}
+                    />
+                  ))}
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          ) : (
+            <p className="py-12 text-center text-sm text-slate-400">
+              No fluid logged this week to compare.
+            </p>
+          )}
         </section>
 
         {/* Meal calorie breakdown */}

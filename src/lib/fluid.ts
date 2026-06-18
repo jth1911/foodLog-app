@@ -1,0 +1,95 @@
+// Pure, framework-free fluid-intake logic. Kept separate from the components so
+// the per-day aggregation, the goal rule, and the report series can all be
+// unit-tested in isolation — mirroring nutrition.ts and weight.ts.
+
+import { weekdayOf } from './dates'
+
+// The fixed set of drink types a fluid entry can carry, in the order the entry
+// form lists them. A small built-in list (not a user-managed library) — the
+// counterpart of nutrition.ts's MEAL_TYPES. 'Other' is the catch-all.
+export const DRINK_TYPES = ['Water', 'Coffee', 'Tea', 'Juice', 'Soda', 'Milk', 'Other'] as const
+
+export type DrinkType = (typeof DRINK_TYPES)[number]
+
+// The daily fluid target (fl oz) used until the user sets their own on the Goals
+// tab. Seeded on a first-ever load so the dashboard shows a goal out of the box.
+export const DEFAULT_TARGET_FLUID = 95
+
+// A single logged drink. Calories are the only nutrition tracked (caloric drinks
+// roll into the day's calorie total alongside food); volume is in fluid ounces.
+// Mirrors FoodEntry's id/date/week/weekday stamping so it slots into the same
+// day-navigation and report windows.
+export type FluidEntry = {
+  id: string
+  date: string // ISO date, e.g. "2026-06-17"
+  week: number
+  weekday: string // e.g. "Wednesday"
+  drinkType: DrinkType
+  oz: number // fluid ounces
+  calories: number
+}
+
+export type FluidTotals = {
+  oz: number
+  calories: number
+}
+
+/** Sum volume and calories across the drinks logged on `date`. */
+export function fluidTotalsForDate(fluids: FluidEntry[], date: string): FluidTotals {
+  const totals: FluidTotals = { oz: 0, calories: 0 }
+  for (const drink of fluids) {
+    if (drink.date !== date) continue
+    totals.oz += drink.oz
+    totals.calories += drink.calories
+  }
+  return totals
+}
+
+/**
+ * Whether the day's `oz` meets the daily fluid `goal`. Fluid is a 'min' target —
+ * meet or exceed it — so this mirrors goalStatus for protein/fiber.
+ */
+export function fluidGoalStatus(oz: number, goal: number): 'met' | 'unmet' {
+  return oz >= goal ? 'met' : 'unmet'
+}
+
+export type FluidDay = {
+  date: string
+  weekday: string
+  oz: number
+}
+
+/** Per-day oz total across `dates`, one row per date (zero for empty days). For
+ * the report bar charts; mirrors fiberSeries/dailyMacroSeries in weekly.ts. */
+export function fluidSeries(fluids: FluidEntry[], dates: string[]): FluidDay[] {
+  return dates.map((date) => ({
+    date,
+    weekday: weekdayOf(date),
+    oz: fluidTotalsForDate(fluids, date).oz,
+  }))
+}
+
+// One row per date carrying each drink type's oz total for that day, so a line
+// chart can compare types (water vs coffee vs tea …) over the window. Every
+// DRINK_TYPES key is always present (0 when none), keeping each line continuous.
+export type FluidTypeDay = { date: string; weekday: string } & Record<DrinkType, number>
+
+/** Per-day oz total split by drink type across `dates`. Mirrors dailyMacroSeries
+ * — a row per date with one numeric field per drink type. */
+export function fluidByTypeSeries(fluids: FluidEntry[], dates: string[]): FluidTypeDay[] {
+  return dates.map((date) => {
+    const row = { date, weekday: weekdayOf(date) } as FluidTypeDay
+    for (const type of DRINK_TYPES) row[type] = 0
+    for (const drink of fluids) {
+      if (drink.date !== date) continue
+      row[drink.drinkType] = (row[drink.drinkType] ?? 0) + drink.oz
+    }
+    return row
+  })
+}
+
+/** The drink types with any volume across `series`, in DRINK_TYPES order — the
+ * lines a comparison chart should actually draw (empty types are omitted). */
+export function activeDrinkTypes(series: FluidTypeDay[]): DrinkType[] {
+  return DRINK_TYPES.filter((type) => series.some((row) => row[type] > 0))
+}

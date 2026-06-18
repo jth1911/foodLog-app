@@ -17,6 +17,9 @@ type GoalsPageProps = {
   // The single target weight in pounds, or null when none is set yet.
   targetWeight: number | null
   onSetTargetWeight: (lb: number) => void
+  // The single daily fluid target in fluid ounces, or null when none is set yet.
+  targetFluid: number | null
+  onSetTargetFluid: (oz: number) => void
   // The date the add form defaults to; injectable so tests pin a known day.
   today?: string
 }
@@ -86,6 +89,72 @@ function TargetWeightCard({
   )
 }
 
+/**
+ * The daily fluid-target card: a single editable goal volume in fluid ounces
+ * (not effective-dated — one value, like the target weight). The report charts
+ * overlay it as a reference line. Keyed by the caller on the stored value, so a
+ * saved/loaded change remounts it with the new number.
+ */
+function TargetFluidCard({
+  targetFluid,
+  onSave,
+}: {
+  targetFluid: number | null
+  onSave: (oz: number) => void
+}) {
+  const [value, setValue] = useState(targetFluid != null ? String(targetFluid) : '')
+  const [error, setError] = useState<string | null>(null)
+
+  const handleSubmit = (e: FormEvent<HTMLFormElement>) => {
+    e.preventDefault()
+    const oz = Number(value.trim())
+    if (value.trim() === '' || !Number.isFinite(oz) || oz <= 0) {
+      setError('Enter a fluid target greater than zero.')
+      return
+    }
+    onSave(oz)
+    setError(null)
+  }
+
+  return (
+    <section
+      aria-label="Target fluid"
+      className="rounded-xl border border-slate-200 bg-white p-5 shadow-sm lg:w-72"
+    >
+      <h2 className="mb-1 text-lg font-semibold text-slate-900">Daily fluid target</h2>
+      <p className="mb-4 text-sm text-slate-500">
+        Your daily hydration goal. Tracked on the dashboard and shown as a reference line on the
+        report fluid charts.
+      </p>
+      <form onSubmit={handleSubmit} className="flex flex-wrap items-center gap-2" noValidate>
+        <input
+          type="number"
+          min="0"
+          step="any"
+          inputMode="decimal"
+          aria-label="Target fluid (fl oz)"
+          placeholder="—"
+          value={value}
+          onChange={(e) => setValue(e.target.value)}
+          className="w-28 rounded-md border border-slate-300 px-3 py-2 text-right text-slate-800 focus:border-slate-500 focus:outline-none"
+        />
+        <span className="text-sm text-slate-500">fl oz</span>
+        <button
+          type="submit"
+          className="rounded-md bg-slate-900 px-4 py-2 text-sm font-medium text-white hover:bg-slate-700 focus:outline-none"
+        >
+          Save
+        </button>
+        {error && (
+          <p role="alert" className="w-full text-sm text-rose-600">
+            {error}
+          </p>
+        )}
+      </form>
+    </section>
+  )
+}
+
 // Readable label for an effective date, formatted in UTC to match the rest of
 // the app. The seeded/migrated default entry uses a sentinel date that would
 // read as a meaningless "0001" — show it as the initial goal instead.
@@ -122,6 +191,8 @@ function GoalsPage({
   onDelete,
   targetWeight,
   onSetTargetWeight,
+  targetFluid,
+  onSetTargetFluid,
   today = todayIso(),
 }: GoalsPageProps) {
   const [effectiveDate, setEffectiveDate] = useState(today)
@@ -210,6 +281,14 @@ function GoalsPage({
           key={targetWeight ?? 'none'}
           targetWeight={targetWeight}
           onSave={onSetTargetWeight}
+        />
+
+        {/* Single daily fluid target. Keyed on the stored value like the weight
+            target so a save/load remounts the field with the new number. */}
+        <TargetFluidCard
+          key={`fluid-${targetFluid ?? 'none'}`}
+          targetFluid={targetFluid}
+          onSave={onSetTargetFluid}
         />
 
         {/* Add-goal-change form */}
