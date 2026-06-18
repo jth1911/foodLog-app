@@ -273,9 +273,9 @@ describe('useFoodLog — weights', () => {
     expect(result.current.weights.every((w) => w.lb === 180)).toBe(true)
   })
 
-  it('seeds the recorded weigh-ins when storage is empty', () => {
+  it('starts with an empty weight log when storage is empty', () => {
     const { result } = renderHook(() => useFoodLog(makeFakeStore()))
-    expect(result.current.weights[0]).toEqual({ date: '2026-05-07', lb: 204 })
+    expect(result.current.weights).toEqual([])
   })
 
   it('upserts a day and re-materialises the carry-forward fill', () => {
@@ -305,9 +305,9 @@ describe('useFoodLog — weights', () => {
 })
 
 describe('useFoodLog — target weight', () => {
-  it('seeds the target weight when none is stored', () => {
+  it('defaults to null when no target is stored', () => {
     const { result } = renderHook(() => useFoodLog(makeFakeStore()))
-    expect(result.current.targetWeight).toBe(180)
+    expect(result.current.targetWeight).toBeNull()
   })
 
   it('loads a stored target weight', () => {

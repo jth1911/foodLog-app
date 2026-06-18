@@ -90,23 +90,6 @@ export const SEED_FOODS: FoodEntry[] = [
   },
 ]
 
-// The recorded weigh-ins, seeded when storage is empty. Only the explicit days
-// are listed — the carry-forward materialisation fills the gaps between them
-// (and forward to today), so e.g. 28 May (202.6) carries to 29 May, 31 May
-// (202) to 1 Jun, and 4 Jun (202) through to 17 Jun.
-export const SEED_WEIGHTS: WeightEntry[] = [
-  { date: '2026-05-07', lb: 204 },
-  { date: '2026-05-28', lb: 202.6 },
-  { date: '2026-05-30', lb: 203 },
-  { date: '2026-05-31', lb: 202 },
-  { date: '2026-06-02', lb: 201 },
-  { date: '2026-06-04', lb: 202 },
-  { date: '2026-06-18', lb: 201 },
-]
-
-// The seeded target weight (lb), applied when none has been stored yet.
-export const SEED_TARGET_WEIGHT = 180
-
 export type FoodLog = {
   entries: FoodEntry[]
   // The effective-dated goal history, sorted ascending by effectiveDate. The
@@ -177,13 +160,14 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   const [foods, setFoods] = useState<Record<string, UserFoodReference[]>>(
     () => store.loadFoods() ?? seedFoodsFromJson(),
   )
-  // Materialise the carry-forward copies up to today on load, so a return visit
-  // on a new day fills the days since the last weigh-in.
+  // Start blank with no seeded weights. Any stored log is materialised forward
+  // to today on load, so a return visit on a new day fills the days since the
+  // last weigh-in.
   const [weights, setWeights] = useState<WeightEntry[]>(() =>
-    materialiseWeights(store.loadWeights() ?? SEED_WEIGHTS, todayIso()),
+    materialiseWeights(store.loadWeights() ?? [], todayIso()),
   )
-  const [targetWeight, setTargetWeightState] = useState<number | null>(
-    () => store.loadTargetWeight() ?? SEED_TARGET_WEIGHT,
+  const [targetWeight, setTargetWeightState] = useState<number | null>(() =>
+    store.loadTargetWeight(),
   )
 
   // Persist on every change, and on mount (which writes the initial seed/
