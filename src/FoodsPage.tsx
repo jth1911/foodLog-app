@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { type UserFoodReference } from './lib/foods'
 import { type NewFoodInput } from './AddFoodModal'
+import { estimateMacros, isGeminiConfigured, mergeEmptyMacros } from './lib/gemini'
 
 type FoodsPageProps = {
   // The user-managed reference foods, keyed by category.
@@ -104,6 +105,10 @@ function FoodsPage({
   const [foodError, setFoodError] = useState<string | null>(null)
   const [newCategory, setNewCategory] = useState('')
   const [categoryError, setCategoryError] = useState<string | null>(null)
+  // Gemini auto-fill (Foods-page form only). Hidden when no key is configured.
+  const geminiReady = isGeminiConfigured()
+  const [autofilling, setAutofilling] = useState(false)
+  const [autofillError, setAutofillError] = useState<string | null>(null)
 
   // The category in effect for the form: the locked one when editing, else the
   // chosen target, falling back to the first category.
@@ -116,6 +121,31 @@ function FoodsPage({
     setForm(blankForm)
     setEditing(null)
     setFoodError(null)
+    setAutofillError(null)
+  }
+
+  // Auto-fill is offered only with a configured key and both a name and serving
+  // size to estimate from — those are the inputs the estimate is based on.
+  const canAutofill =
+    geminiReady && form.food.trim() !== '' && form.serving_size.trim() !== '' && !autofilling
+
+  // Estimate the macros from name + serving size and fill ONLY the blank fields;
+  // anything the user typed is preserved. Failures surface inline and never
+  // block manual entry — the user still reviews and clicks Save.
+  const handleAutofill = async () => {
+    setAutofillError(null)
+    setAutofilling(true)
+    try {
+      const estimate = await estimateMacros({
+        food: form.food.trim(),
+        serving_size: form.serving_size.trim(),
+      })
+      setForm((prev) => ({ ...prev, ...mergeEmptyMacros(prev, estimate) }))
+    } catch (err) {
+      setAutofillError(err instanceof Error ? err.message : 'Could not auto-fill macros.')
+    } finally {
+      setAutofilling(false)
+    }
   }
 
   const startEdit = (category: string, food: UserFoodReference) => {
@@ -348,6 +378,30 @@ function FoodsPage({
                   />
                 </label>
               ))}
+
+              {geminiReady && (
+                <div>
+                  <button
+                    type="button"
+                    onClick={handleAutofill}
+                    disabled={!canAutofill}
+                    className="w-full rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100 focus:outline-none disabled:cursor-not-allowed disabled:opacity-50"
+                  >
+                    {autofilling ? 'Estimating…' : 'Auto-fill missing macros'}
+                  </button>
+                  {!canAutofill && !autofilling && (
+                    <p className="mt-1 text-xs text-slate-400">
+                      Enter a food name and serving size to estimate the rest.
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {autofillError && (
+                <p role="alert" className="text-sm text-rose-600">
+                  {autofillError}
+                </p>
+              )}
 
               {foodError && (
                 <p role="alert" className="text-sm text-rose-600">

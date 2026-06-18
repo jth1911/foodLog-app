@@ -6,6 +6,7 @@ A simple, offline-first food-tracking dashboard built with React, TypeScript and
 
 - **Dashboard / Foods / Goals tabs** — a persistent tab bar switches between the dashboard, a browser of reference foods, and the goals history. All stay mounted and share one data store, so the dashboard keeps its logged entries while you browse and reflects goal changes immediately.
 - **Foods page** — a **user-managed** reference library grouped into headed sections by category (Dairy/Eggs, Meat/Poultry, …), each food showing its serving size and key macros. On first load the library is **seeded once** from `src/data/proteinSources.json` into `localStorage`; after that the stored copy is the sole source of truth. You can **add a food** to any category (name, serving size, protein/carbs/calories required; fat/fiber optional), **add a category**, **edit a food** in place (its id and category preserved), and **delete** a single food or a whole category (deleting a non-empty category asks first). Tapping a food jumps to the dashboard with the add-food modal pre-filled from its macros — user foods store plain numbers, and `fat`/`fiber` flow through when present; you can adjust anything before saving.
+- **Auto-fill missing macros (Gemini)** — on the Foods page's add/edit form, an **Auto-fill missing macros** button estimates a food's per-serving macros from its **name + serving size** via Google Gemini and fills **only the currently-empty** fields (protein/carbs/calories/fat/fiber) — anything you typed is left untouched. You still review the result and click **Save** as normal; nothing is written automatically. The button is **disabled** until both a name and serving size are entered, and is **hidden entirely** when no API key is configured, so the rest of the app works unchanged without one. Failures (network, quota, an unusable response) surface inline and never block manual entry. Requires `VITE_GEMINI_API_KEY` — see [Gemini auto-fill setup](#gemini-auto-fill-setup) below.
 - **Quantity scaling** — when the modal opens pre-filled from a reference food, the macro fields represent **one serving** (shown read-only, e.g. `1 large`) and a **quantity** input multiplies them, so "I ate 2 eggs" or "half a cup" scales protein/carbs/calories — and any fat/fiber you add — automatically, with a live preview of the totals. Quantities allow decimals (`0.5`) and scaled macros round to one decimal place. The logged entry remembers its serving and quantity and the food-log row shows them (e.g. **`Egg — 2 × 1 large`**). A blank open from the `+` button has no quantity field and behaves as before — entered macros are final.
 - **Date selector** — the app lands on the **real current date**, and a **Today** button jumps back to it. Pick any day from a clickable month-grid calendar (a popover behind the date button — visible weekdays make "a Wednesday two weeks ago" a glance-and-click) or step one day at a time (`‹` / `›`). The summary card and food log are both driven by the selected date, so they always describe the same set of entries. The current date is an injectable `today` prop (defaulting to the real clock) so tests pin a known day instead of depending on `Date.now()`.
 - **Daily summary card** — the selected day's totals vs. the **goal in effect on that day** for calories, protein, fat, carbs and fiber, colour-coded by whether each goal is met. The goal shown here is read-only — it's resolved from the goal history (see below) and edited on the Goals tab.
@@ -22,6 +23,7 @@ State is persisted to `localStorage` and seeded — only when storage is empty �
 - [Tailwind CSS v4](https://tailwindcss.com/) (via `@tailwindcss/vite`)
 - [React DayPicker](https://daypicker.dev/) (`@daypicker/react`) for the calendar date picker
 - [Web Storage API](https://developer.mozilla.org/en-US/docs/Web/API/Window/localStorage) (`localStorage`) for persistence
+- [Google Gemini](https://ai.google.dev/gemini-api/docs) (`@google/genai`) for the optional macro auto-fill
 - [Vitest](https://vitest.dev/) + [React Testing Library](https://testing-library.com/) for tests
 
 ## Getting started
@@ -32,6 +34,20 @@ npm run dev      # start the dev server
 npm test         # run the test suite once
 npm run build    # type-check and build for production
 ```
+
+## Gemini auto-fill setup
+
+The Foods-page **Auto-fill missing macros** button is optional and off until you provide a Google Gemini API key:
+
+1. Get a key from [Google AI Studio](https://ai.google.dev/gemini-api/docs/api-key).
+2. Copy `.env.example` to `.env.local` and set `VITE_GEMINI_API_KEY` to your key.
+3. Restart `npm run dev` (Vite only reads env files at startup).
+
+Without the key the control is hidden and the rest of the app works normally. The estimate is requested as structured JSON from a flash-tier model (`gemini-3.5-flash`) using the food's name and serving size; all of this is isolated in `src/lib/gemini.ts`.
+
+> **⚠️ Security — personal/local use only.** This is a pure client-side app with **no backend**, so it calls Gemini **directly from the browser** and the key is **inlined into the shipped bundle** — anyone who loads a deployed build can read it. Only set the key for a personal/local build. If this is ever deployed for others, the secure alternative is a **server-side proxy** that holds the key and exposes a narrow endpoint; that's a known limitation and out of scope here. Vite only inlines build-time vars prefixed with `VITE_` (it does **not** read `process.env` in the browser), which is why the key is named `VITE_GEMINI_API_KEY` and passed explicitly to the SDK.
+
+> **Possible follow-up.** [Google Search grounding](https://ai.google.dev/gemini-api/docs/google-search) could make estimates reflect looked-up values, but the `googleSearch` tool can't currently be combined with a strict `responseSchema` in one call, so the structured-JSON path is used on its own for now.
 
 ## Persistence
 
@@ -51,8 +67,8 @@ src/
   useFoodLog.test.tsx  # tests: seed-when-empty, migration, load-from-store, save-on-change, goal-history + entry-update + foods mutations
   GoalsPage.tsx        # Goals tab: dated goal history (newest-first) with delete + add-goal-change form
   GoalsPage.test.tsx   # tests: ordering, initial-goal label, delete (disabled on last), add + validation
-  FoodsPage.tsx        # user-managed reference-food library by category: add/edit/delete foods & categories; raises picked macros
-  FoodsPage.test.tsx   # tests: headings, rows, food→NewFoodInput mapping, add/edit/delete food & category, validation
+  FoodsPage.tsx        # user-managed reference-food library by category: add/edit/delete foods & categories; raises picked macros; Gemini auto-fill button
+  FoodsPage.test.tsx   # tests: headings, rows, food→NewFoodInput mapping, add/edit/delete food & category, validation, auto-fill (gemini mocked)
   AddFoodModal.tsx     # presentational add/edit-food form shown in a Tailwind overlay (editing mode: final totals, Save)
   AddFoodModal.test.tsx# tests: fields, validation, submit payload, pre-fill, cancel/close
   MealFeed.tsx         # food log container: groups entries into meal sections
@@ -70,4 +86,6 @@ src/
     dates.test.ts      # unit tests: month/year/leap, weekday/ISO-week boundaries, today + Date round-trips
     foods.ts           # typed accessor + macro normaliser + UserFoodReference type + seedFoodsFromJson (first-run library)
     foods.test.ts      # unit tests: normaliseMacro/scale rules, category map shape, seed conversion
+    gemini.ts          # isolated Gemini client: estimateMacros (structured JSON) + isGeminiConfigured + pure mergeEmptyMacros
+    gemini.test.ts     # unit tests: prompt/parse/coerce, key + failure paths, merge-only-blanks rule (SDK mocked)
 ```

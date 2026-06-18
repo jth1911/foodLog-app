@@ -13,6 +13,7 @@
   },
   "dependencies": {
     "@daypicker/react": "^10.0.1",
+    "@google/genai": "^2.8.0",
     "@tailwindcss/vite": "^4.3.1",
     "react": "^19.2.6",
     "react-dom": "^19.2.6",
