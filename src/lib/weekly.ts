@@ -13,7 +13,7 @@ import {
   type MealType,
 } from './nutrition'
 import { addDays, weekdayOf } from './dates'
-import { roundMacro } from './foods'
+import { roundMacro, tokenizeFoodName, type FoodCategoryIndex } from './foods'
 
 /**
  * The `days` ISO dates ending at (and including) `endDate`, ascending. Defaults
@@ -172,20 +172,47 @@ const SUPPLEMENT_KEYWORDS = [
   'whey',
   'casein',
   'mass gainer',
+  'collagen',
 ]
 
+// Generic terms that name a food group but no specific library food — a last
+// resort, only consulted after exact and token matching miss. Keys are single
+// lower-cased tokens (matched against the description's tokens, so word-boundary
+// safe: "fish" hits "Grilled Fish" but not "Fillo's").
+const FOOD_GROUP_ALIASES: Record<string, string> = {
+  steak: 'Meat/Poultry',
+  fish: 'Seafood',
+  poke: 'Seafood',
+}
+
 /**
- * Resolve one entry's `description` to a food group. Exact match against the
- * library index wins, *except* when it resolves to the catch-all "Other": a
- * specific supplement keyword then upgrades it to "Supplements" (so a protein
- * powder filed under "Other", or typed free-text, still lands there). An
- * explicit non-"Other" category the user chose is always respected.
+ * Resolve one entry's free-text `description` to a food group, most-confident
+ * rule first:
+ *   1. exact library-name match to an explicit non-"Other" category — respected;
+ *   2. token-subset match — a library food whose every key token appears in the
+ *      description (most-specific food wins, since the index is sorted that way);
+ *   3. a supplement keyword (whey, casein, …) → "Supplements";
+ *   4. a generic alias (steak → Meat/Poultry, …);
+ *   5. otherwise "Other".
+ * Steps 2–4 also upgrade an entry that exact-matched the catch-all "Other", so a
+ * verbose or generic description still finds its group.
  */
-export function resolveFoodGroup(description: string, categoryIndex: Map<string, string>): string {
+export function resolveFoodGroup(description: string, index: FoodCategoryIndex): string {
   const key = description.trim().toLowerCase()
-  const exact = categoryIndex.get(key)
+  const exact = index.exact.get(key)
   if (exact && exact !== 'Other') return exact
+
+  const descTokens = new Set(tokenizeFoodName(description))
+  for (const food of index.tokenized) {
+    if (food.category !== 'Other' && food.tokens.every((token) => descTokens.has(token))) {
+      return food.category
+    }
+  }
+
   if (SUPPLEMENT_KEYWORDS.some((keyword) => key.includes(keyword))) return 'Supplements'
+  for (const [alias, category] of Object.entries(FOOD_GROUP_ALIASES)) {
+    if (descTokens.has(alias)) return category
+  }
   return exact ?? 'Other'
 }
 
@@ -212,7 +239,7 @@ export type ProteinSourceSlice = {
 export function proteinByFoodGroup(
   entries: FoodEntry[],
   dates: string[],
-  categoryIndex: Map<string, string>,
+  categoryIndex: FoodCategoryIndex,
 ): ProteinSourceSlice[] {
   const inWindow = new Set(dates)
   const proteinByCategory = new Map<string, number>()

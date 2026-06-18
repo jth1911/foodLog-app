@@ -9,7 +9,13 @@ import {
   resolveFoodGroup,
 } from './weekly'
 import { GOALS_EPOCH, type FoodEntry, type GoalChange } from './nutrition'
+import { buildFoodCategoryIndex, type UserFoodReference } from './foods'
 import { isoWeekOf, weekdayOf } from './dates'
+
+// A reference food carrying only the fields the category index reads.
+function refFood(name: string): UserFoodReference {
+  return { id: name, food: name, serving_size: '1', protein: 0, carbs: 0, calories: 0 }
+}
 
 // Build a FoodEntry with sensible defaults, overriding only what a test cares
 // about. Week/weekday are derived so entries stay internally consistent.
@@ -201,11 +207,11 @@ describe('mealCalorieBreakdown', () => {
 
 describe('proteinByFoodGroup', () => {
   const dates = weekWindow('2026-06-17')
-  const index = new Map<string, string>([
-    ['chicken breast', 'Meat/Poultry'],
-    ['greek yogurt', 'Dairy/Eggs'],
-    ['lentils', 'Legumes'],
-  ])
+  const index = buildFoodCategoryIndex({
+    'Meat/Poultry': [refFood('Chicken Breast (skinless)')],
+    'Dairy/Eggs': [refFood('Greek yogurt (non fat, plain)')],
+    Legumes: [refFood('Lentils')],
+  })
 
   it('sums protein per food group across the window with percentages', () => {
     const entries = [
@@ -268,30 +274,45 @@ describe('proteinByFoodGroup', () => {
 })
 
 describe('resolveFoodGroup', () => {
-  const index = new Map<string, string>([
-    ['chicken breast', 'Meat/Poultry'],
-    ['my whey scoop', 'Other'], // a library food the user filed under Other
-    ['greek yogurt', 'Dairy/Eggs'],
-  ])
+  const index = buildFoodCategoryIndex({
+    'Meat/Poultry': [refFood('Chicken Breast (skinless)')],
+    'Dairy/Eggs': [refFood('Greek yogurt (non fat, plain)')],
+    'Nuts/Seeds': [refFood('Chia Seeds')],
+    Legumes: [refFood('Black Beans')],
+    Other: [refFood('My Whey Scoop')], // a supplement the user filed under Other
+  })
 
   it('returns an exact, non-Other library match unchanged', () => {
-    expect(resolveFoodGroup('Chicken Breast', index)).toBe('Meat/Poultry')
-    expect(resolveFoodGroup('greek yogurt', index)).toBe('Dairy/Eggs')
+    expect(resolveFoodGroup('Greek yogurt (non fat, plain)', index)).toBe('Dairy/Eggs')
+  })
+
+  it('token-matches verbose descriptions to their generic library food', () => {
+    expect(resolveFoodGroup('Stonyfield Organic Greek Plain Nonfat Yogurt', index)).toBe('Dairy/Eggs')
+    expect(resolveFoodGroup('Chicken Breast x 2', index)).toBe('Meat/Poultry')
+    expect(resolveFoodGroup('Organic Chia Seed', index)).toBe('Nuts/Seeds')
+    expect(resolveFoodGroup("Fillo's Cuban Black Beans Sofrito", index)).toBe('Legumes')
   })
 
   it('upgrades an Other-filed match to Supplements when a keyword matches', () => {
-    // Exact-matches the "my whey scoop" → Other entry, but "whey" upgrades it.
-    expect(resolveFoodGroup('My whey scoop', index)).toBe('Supplements')
+    // Exact-matches "my whey scoop" → Other, but "whey" upgrades it.
+    expect(resolveFoodGroup('My Whey Scoop', index)).toBe('Supplements')
   })
 
   it('keyword-classifies unmatched free-text supplements', () => {
     expect(resolveFoodGroup('Protein Powder (vanilla)', index)).toBe('Supplements')
     expect(resolveFoodGroup('Casein before bed', index)).toBe('Supplements')
-    expect(resolveFoodGroup('mass gainer', index)).toBe('Supplements')
+    expect(resolveFoodGroup('Collagen Peptide', index)).toBe('Supplements')
   })
 
-  it('does not misclassify ordinary high-protein foods', () => {
+  it('falls back to generic aliases for groups with no specific food', () => {
+    expect(resolveFoodGroup('Steak', index)).toBe('Meat/Poultry')
+    expect(resolveFoodGroup('Grilled Fish', index)).toBe('Seafood')
+  })
+
+  it('does not misclassify ordinary or unknown foods', () => {
     expect(resolveFoodGroup('High-protein bread', index)).toBe('Other')
     expect(resolveFoodGroup('Unknown thing', index)).toBe('Other')
+    // "fish" is word-boundary matched, so a brand like Fillo's never trips it.
+    expect(resolveFoodGroup("Fillo's Tex-Mex Pinto Beans", index)).toBe('Other')
   })
 })

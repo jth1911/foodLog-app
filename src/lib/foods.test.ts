@@ -6,6 +6,7 @@ import {
   roundMacro,
   scaleMacros,
   seedFoodsFromJson,
+  tokenizeFoodName,
   type FoodReference,
   type UserFoodReference,
 } from './foods'
@@ -156,18 +157,18 @@ describe('buildFoodCategoryIndex', () => {
     calories: 0,
   })
 
-  it('maps each food name to its category', () => {
+  it('maps each food name to its category in the exact index', () => {
     const index = buildFoodCategoryIndex({
       'Dairy/Eggs': [food('Egg')],
       'Meat/Poultry': [food('Chicken breast')],
     })
-    expect(index.get('egg')).toBe('Dairy/Eggs')
-    expect(index.get('chicken breast')).toBe('Meat/Poultry')
+    expect(index.exact.get('egg')).toBe('Dairy/Eggs')
+    expect(index.exact.get('chicken breast')).toBe('Meat/Poultry')
   })
 
-  it('keys are trimmed and lower-cased for case-insensitive lookup', () => {
+  it('exact keys are trimmed and lower-cased for case-insensitive lookup', () => {
     const index = buildFoodCategoryIndex({ 'Meat/Poultry': [food('  Chicken Breast ')] })
-    expect(index.get('chicken breast')).toBe('Meat/Poultry')
+    expect(index.exact.get('chicken breast')).toBe('Meat/Poultry')
   })
 
   it('last category wins when a name appears twice', () => {
@@ -175,10 +176,34 @@ describe('buildFoodCategoryIndex', () => {
       'Dairy/Eggs': [food('Tofu')],
       Legumes: [food('Tofu')],
     })
-    expect(index.get('tofu')).toBe('Legumes')
+    expect(index.exact.get('tofu')).toBe('Legumes')
   })
 
-  it('returns an empty index for an empty library', () => {
-    expect(buildFoodCategoryIndex({}).size).toBe(0)
+  it('records tokens per food, most-specific (most tokens) first', () => {
+    const index = buildFoodCategoryIndex({
+      'Meat/Poultry': [food('Chicken Breast (skinless)')],
+      Seafood: [food('Cod')],
+    })
+    expect(index.tokenized[0]).toEqual({ category: 'Meat/Poultry', tokens: ['chicken', 'breast'] })
+    expect(index.tokenized[1]).toEqual({ category: 'Seafood', tokens: ['cod'] })
+  })
+
+  it('returns empty exact and tokenized for an empty library', () => {
+    const index = buildFoodCategoryIndex({})
+    expect(index.exact.size).toBe(0)
+    expect(index.tokenized).toEqual([])
+  })
+})
+
+describe('tokenizeFoodName', () => {
+  it('drops parentheticals, descriptors and short words, and singularises', () => {
+    expect(tokenizeFoodName('Greek yogurt (non fat, plain)')).toEqual(['greek', 'yogurt'])
+    expect(tokenizeFoodName('Chia Seeds')).toEqual(['chia', 'seed'])
+    expect(tokenizeFoodName('Chicken Breast (skinless)')).toEqual(['chicken', 'breast'])
+  })
+
+  it('shares tokens between a verbose entry and its generic library name', () => {
+    const entry = new Set(tokenizeFoodName('Stonyfield Organic Greek Plain Nonfat Yogurt'))
+    expect(tokenizeFoodName('Greek yogurt (non fat, plain)').every((t) => entry.has(t))).toBe(true)
   })
 })
