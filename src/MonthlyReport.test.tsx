@@ -99,17 +99,33 @@ describe('MonthlyReport', () => {
     expect(screen.getByRole('button', { name: 'Next month' })).toBeEnabled()
   })
 
-  it('colours a logged day by its goal band, neutral when unlogged', () => {
-    // goal 2000, ±10% band → floor 1800, ceiling 2200.
+  it('colours a logged calorie day by its goal band, neutral when unlogged', () => {
+    // goal 2000, ±10% band → floor 1800, ceiling 2200. Under is the win → green.
     const entries = [
       entry({ date: '2026-06-03', calories: 1500 }), // comfortably under → green
       entry({ date: '2026-06-04', calories: 2000 }), // nearing the goal → amber
       entry({ date: '2026-06-05', calories: 3000 }), // over → red
     ]
     render(<MonthlyReport loggedFoods={entries} goalHistory={goals(2000)} today={TODAY} />)
-    expect(screen.getByTitle('2026-06-03: 1500 kcal — Under').className).toContain('bg-emerald-500')
-    expect(screen.getByTitle('2026-06-04: 2000 kcal — Near goal').className).toContain('bg-amber-400')
-    expect(screen.getByTitle('2026-06-05: 3000 kcal — Surplus').className).toContain('bg-rose-500')
-    expect(screen.getByTitle('2026-06-06: no log').className).toContain('bg-slate-100')
+    const heatmap = within(screen.getByLabelText('Calorie heatmap'))
+    expect(heatmap.getByTitle('2026-06-03: 1500 kcal — Under').className).toContain('bg-emerald-500')
+    expect(heatmap.getByTitle('2026-06-04: 2000 kcal — Near goal').className).toContain('bg-amber-400')
+    expect(heatmap.getByTitle('2026-06-05: 3000 kcal — Surplus').className).toContain('bg-rose-500')
+    expect(heatmap.getByTitle('2026-06-06: no log').className).toContain('bg-slate-100')
+  })
+
+  it('colours the protein heatmap inverted — hitting the goal is green', () => {
+    // protein goal 120, ±10% band → floor 108, ceiling 132. More is better, so
+    // green/red invert vs calories: over is green, under is red.
+    const entries = [
+      entry({ date: '2026-06-03', protein: 90 }), // missed → red
+      entry({ date: '2026-06-04', protein: 120 }), // near goal → amber
+      entry({ date: '2026-06-05', protein: 150 }), // hit → green
+    ]
+    render(<MonthlyReport loggedFoods={entries} goalHistory={goals(2000)} today={TODAY} />)
+    const heatmap = within(screen.getByLabelText('Protein heatmap'))
+    expect(heatmap.getByTitle('2026-06-03: 90 g — Missed').className).toContain('bg-rose-500')
+    expect(heatmap.getByTitle('2026-06-04: 120 g — Near goal').className).toContain('bg-amber-400')
+    expect(heatmap.getByTitle('2026-06-05: 150 g — Hit').className).toContain('bg-emerald-500')
   })
 })

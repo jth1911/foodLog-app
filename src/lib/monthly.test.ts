@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest'
-import { calorieHeatmap, topFoods, monthlyMacroRatio, CALORIE_BAND } from './monthly'
+import { macroHeatmap, topFoods, monthlyMacroRatio, GOAL_BAND } from './monthly'
 import { GOALS_EPOCH, type FoodEntry, type GoalChange } from './nutrition'
 import { monthDays, isoWeekOf, weekdayOf } from './dates'
 
@@ -33,9 +33,9 @@ function goalsWith(calories: number): GoalChange[] {
 
 const JUNE = monthDays('2026-06-01')
 
-describe('calorieHeatmap', () => {
+describe('macroHeatmap (calories)', () => {
   it('returns one row per date with empty status for unlogged days', () => {
-    const result = calorieHeatmap([], goalsWith(2000), JUNE)
+    const result = macroHeatmap([], goalsWith(2000), JUNE, 'calories')
     expect(result).toHaveLength(30)
     expect(result.every((d) => d.status === 'empty')).toBe(true)
     expect(result.every((d) => d.entryCount === 0)).toBe(true)
@@ -48,7 +48,7 @@ describe('calorieHeatmap', () => {
       entry({ date: '2026-06-02', calories: 2000 }), // in-range (midpoint)
       entry({ date: '2026-06-03', calories: 2500 }), // over
     ]
-    const result = calorieHeatmap(entries, goalsWith(2000), JUNE)
+    const result = macroHeatmap(entries, goalsWith(2000), JUNE, 'calories')
     const byDate = Object.fromEntries(result.map((d) => [d.date, d.status]))
     expect(byDate['2026-06-01']).toBe('under')
     expect(byDate['2026-06-02']).toBe('in-range')
@@ -56,22 +56,31 @@ describe('calorieHeatmap', () => {
   })
 
   it('treats the floor and ceiling as inclusive of in-range', () => {
-    const floor = 2000 * (1 - CALORIE_BAND) // 1800
-    const ceiling = 2000 * (1 + CALORIE_BAND) // 2200
+    const floor = 2000 * (1 - GOAL_BAND) // 1800
+    const ceiling = 2000 * (1 + GOAL_BAND) // 2200
     const entries = [
       entry({ date: '2026-06-10', calories: floor }),
       entry({ date: '2026-06-11', calories: ceiling }),
     ]
-    const result = calorieHeatmap(entries, goalsWith(2000), JUNE)
+    const result = macroHeatmap(entries, goalsWith(2000), JUNE, 'calories')
     const byDate = Object.fromEntries(result.map((d) => [d.date, d.status]))
     expect(byDate['2026-06-10']).toBe('in-range')
     expect(byDate['2026-06-11']).toBe('in-range')
   })
 
-  it('reads as logged (not empty) when entries exist but total zero calories', () => {
+  it('exposes the macro total as `value`', () => {
+    const entries = [entry({ date: '2026-06-07', calories: 1950 })]
+    const day = macroHeatmap(entries, goalsWith(2000), JUNE, 'calories').find(
+      (d) => d.date === '2026-06-07',
+    )!
+    expect(day.value).toBe(1950)
+  })
+
+  it('reads as logged (not empty) when entries exist but total zero', () => {
     const entries = [entry({ date: '2026-06-05', calories: 0 })]
-    const result = calorieHeatmap(entries, goalsWith(2000), JUNE)
-    const day = result.find((d) => d.date === '2026-06-05')!
+    const day = macroHeatmap(entries, goalsWith(2000), JUNE, 'calories').find(
+      (d) => d.date === '2026-06-05',
+    )!
     expect(day.entryCount).toBe(1)
     expect(day.status).toBe('under') // logged, far below the floor
   })
@@ -85,10 +94,35 @@ describe('calorieHeatmap', () => {
       entry({ date: '2026-06-10', calories: 2500 }), // vs 2000 goal → over
       entry({ date: '2026-06-20', calories: 2500 }), // vs 3000 goal → under
     ]
-    const result = calorieHeatmap(entries, goalHistory, JUNE)
+    const result = macroHeatmap(entries, goalHistory, JUNE, 'calories')
     const byDate = Object.fromEntries(result.map((d) => [d.date, d.status]))
     expect(byDate['2026-06-10']).toBe('over')
     expect(byDate['2026-06-20']).toBe('under')
+  })
+})
+
+describe('macroHeatmap (protein)', () => {
+  it('classifies a different macro against its own goal band', () => {
+    // protein goal 120, band ±10% → floor 108, ceiling 132.
+    const entries = [
+      entry({ date: '2026-06-01', protein: 90 }), // under
+      entry({ date: '2026-06-02', protein: 120 }), // in-range (midpoint)
+      entry({ date: '2026-06-03', protein: 150 }), // over
+    ]
+    const result = macroHeatmap(entries, goalsWith(2000), JUNE, 'protein')
+    const byDate = Object.fromEntries(result.map((d) => [d.date, d.status]))
+    expect(byDate['2026-06-01']).toBe('under')
+    expect(byDate['2026-06-02']).toBe('in-range')
+    expect(byDate['2026-06-03']).toBe('over')
+  })
+
+  it('reports the protein total as `value` and ignores calories', () => {
+    const entries = [entry({ date: '2026-06-04', protein: 130, calories: 2000 })]
+    const day = macroHeatmap(entries, goalsWith(2000), JUNE, 'protein').find(
+      (d) => d.date === '2026-06-04',
+    )!
+    expect(day.value).toBe(130)
+    expect(day.status).toBe('in-range')
   })
 })
 

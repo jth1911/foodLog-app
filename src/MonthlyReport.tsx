@@ -2,29 +2,58 @@ import { useMemo, useState } from 'react'
 import { Cell, Legend, Pie, PieChart, ResponsiveContainer, Tooltip } from 'recharts'
 import { type FoodEntry, type GoalChange } from './lib/nutrition'
 import {
-  calorieHeatmap,
+  macroHeatmap,
   monthlyMacroRatio,
   topFoods,
-  type CalorieStatus,
+  type BandStatus,
+  type HeatmapDay,
 } from './lib/monthly'
 import { addMonths, monthDays, startOfMonth, todayIso } from './lib/dates'
 
-// Heatmap cell colour per calorie status. Finishing comfortably under the goal
-// is the win, so green is the band below the floor; amber warns as intake nears
-// the goal (within the ±band), rose flags exceeding the ceiling, and a faint
-// slate marks days with no log.
-const STATUS_COLORS: Record<CalorieStatus, string> = {
-  under: 'bg-emerald-500',
-  'in-range': 'bg-amber-400',
-  over: 'bg-rose-500',
-  empty: 'bg-slate-100',
+// A heatmap's presentation. The band classification (under/in-range/over) is
+// positional and macro-agnostic, so colours and labels are assigned per macro:
+// calories is a budget where finishing under is the win, while protein is a
+// target where hitting or exceeding it is — so green/red invert between them.
+type HeatmapConfig = {
+  ariaLabel: string
+  title: string
+  description: string
+  unit: string
+  colors: Record<BandStatus, string>
+  labels: Record<BandStatus, string>
+  // Legend order, good → bad, so the colour the user wants to see leads.
+  legend: BandStatus[]
 }
 
-const STATUS_LABELS: Record<CalorieStatus, string> = {
-  under: 'Under',
-  'in-range': 'Near goal',
-  over: 'Surplus',
-  empty: 'No log',
+const NEUTRAL = 'bg-slate-100'
+const GREEN = 'bg-emerald-500'
+const AMBER = 'bg-amber-400'
+const RED = 'bg-rose-500'
+
+// Calories — a max budget: comfortably under is green, nearing the goal amber,
+// over the ceiling red.
+const CALORIE_HEATMAP: HeatmapConfig = {
+  ariaLabel: 'Calorie heatmap',
+  title: 'Calorie ceiling & floor',
+  description:
+    'Each logged day against its calorie goal — green is comfortably under, amber nearing it, red over.',
+  unit: 'kcal',
+  colors: { under: GREEN, 'in-range': AMBER, over: RED, empty: NEUTRAL },
+  labels: { under: 'Under', 'in-range': 'Near goal', over: 'Surplus', empty: 'No log' },
+  legend: ['under', 'in-range', 'over', 'empty'],
+}
+
+// Protein — a target to hit: at/above the goal is green, nearing it amber, well
+// under red. Green/red invert relative to calories because more protein is good.
+const PROTEIN_HEATMAP: HeatmapConfig = {
+  ariaLabel: 'Protein heatmap',
+  title: 'Protein ceiling & floor',
+  description:
+    'Each logged day against its protein goal — green hit the target, amber nearing it, red missed.',
+  unit: 'g',
+  colors: { over: GREEN, 'in-range': AMBER, under: RED, empty: NEUTRAL },
+  labels: { over: 'Hit', 'in-range': 'Near goal', under: 'Missed', empty: 'No log' },
+  legend: ['over', 'in-range', 'under', 'empty'],
 }
 
 // Macro hues mirror the Weekly report's macro trend colours so the split reads
@@ -68,6 +97,62 @@ function formatMonth(iso: string): string {
   return monthFormat.format(new Date(Date.UTC(year, month - 1, 1)))
 }
 
+// A full-month calendar heatmap card: a 7-column grid of day cells coloured by
+// each day's band status, with leading blanks so the 1st lines up under its
+// weekday, plus a legend. Presentation comes entirely from `config`, so the same
+// card renders the calorie and protein heatmaps.
+function HeatmapCard({
+  days,
+  leadingBlanks,
+  config,
+}: {
+  days: HeatmapDay[]
+  leadingBlanks: number
+  config: HeatmapConfig
+}) {
+  return (
+    <section aria-label={config.ariaLabel} className={`${cardClass} lg:col-span-2`}>
+      <h2 className="mb-1 text-lg font-semibold text-slate-900">{config.title}</h2>
+      <p className="mb-4 text-sm text-slate-500">{config.description}</p>
+      <div className="grid grid-cols-7 gap-1.5">
+        {WEEKDAY_HEADS.map((wd) => (
+          <div key={wd} className="pb-1 text-center text-xs font-medium text-slate-400">
+            {wd}
+          </div>
+        ))}
+        {/* Leading blanks so the 1st lines up under its weekday. */}
+        {Array.from({ length: leadingBlanks }, (_, i) => (
+          <div key={`blank-${i}`} />
+        ))}
+        {days.map((day) => (
+          <div
+            key={day.date}
+            title={
+              day.status === 'empty'
+                ? `${day.date}: no log`
+                : `${day.date}: ${Math.round(day.value)} ${config.unit} — ${config.labels[day.status]}`
+            }
+            className={`flex aspect-square items-center justify-center rounded text-xs font-medium ${
+              config.colors[day.status]
+            } ${day.status === 'empty' ? 'text-slate-400' : 'text-white'}`}
+          >
+            {dayOfMonth(day.date)}
+          </div>
+        ))}
+      </div>
+      {/* Legend */}
+      <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
+        {config.legend.map((status) => (
+          <span key={status} className="flex items-center gap-1.5">
+            <span className={`inline-block h-3 w-3 rounded ${config.colors[status]}`} />
+            {config.labels[status]}
+          </span>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 // Slice labels like "Protein 30%". Uses Recharts' own label props — `name` (our
 // `macro` nameKey, lower-cased, so it's mapped through MACRO_LABELS for display)
 // and `percent` (the slice's 0–1 fraction).
@@ -87,19 +172,24 @@ type MonthlyReportProps = {
 const cardClass = 'rounded-xl border border-slate-200 bg-white p-5 shadow-sm'
 
 /**
- * The Monthly report (big-picture view): a full-month calendar heatmap of daily
- * calories against the goal band, the month's most-frequent foods, and the
- * overall protein/carbs/fat split. All figures derive from the shared food log
- * and the effective-dated goals — each day's heatmap cell is judged against the
- * goal in effect on that day, so editing goals on the Goals tab flows through.
+ * The Monthly report (big-picture view): full-month calendar heatmaps of daily
+ * calories and protein against their goal bands, the month's most-frequent
+ * foods, and the overall protein/carbs/fat split. All figures derive from the
+ * shared food log and the effective-dated goals — each day's heatmap cell is
+ * judged against the goal in effect on that day, so editing goals on the Goals
+ * tab flows through.
  */
 function MonthlyReport({ loggedFoods, goalHistory, today = todayIso() }: MonthlyReportProps) {
   const currentMonth = startOfMonth(today)
   const [month, setMonth] = useState(currentMonth)
 
   const dates = useMemo(() => monthDays(month), [month])
-  const heatmap = useMemo(
-    () => calorieHeatmap(loggedFoods, goalHistory, dates),
+  const calorieDays = useMemo(
+    () => macroHeatmap(loggedFoods, goalHistory, dates, 'calories'),
+    [loggedFoods, goalHistory, dates],
+  )
+  const proteinDays = useMemo(
+    () => macroHeatmap(loggedFoods, goalHistory, dates, 'protein'),
     [loggedFoods, goalHistory, dates],
   )
   const foods = useMemo(() => topFoods(loggedFoods, dates, 10), [loggedFoods, dates])
@@ -147,50 +237,11 @@ function MonthlyReport({ loggedFoods, goalHistory, today = todayIso() }: Monthly
       </header>
 
       <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        {/* Calorie ceiling & floor heatmap */}
-        <section aria-label="Calorie heatmap" className={`${cardClass} lg:col-span-2`}>
-          <h2 className="mb-1 text-lg font-semibold text-slate-900">Calorie ceiling &amp; floor</h2>
-          <p className="mb-4 text-sm text-slate-500">
-            Each logged day against its calorie goal — green is comfortably under, amber nearing it, red over.
-          </p>
-          <div className="grid grid-cols-7 gap-1.5">
-            {WEEKDAY_HEADS.map((wd) => (
-              <div key={wd} className="pb-1 text-center text-xs font-medium text-slate-400">
-                {wd}
-              </div>
-            ))}
-            {/* Leading blanks so the 1st lines up under its weekday. */}
-            {Array.from({ length: leadingBlanks }, (_, i) => (
-              <div key={`blank-${i}`} />
-            ))}
-            {heatmap.map((day) => (
-              <div
-                key={day.date}
-                title={
-                  day.status === 'empty'
-                    ? `${day.date}: no log`
-                    : `${day.date}: ${Math.round(day.calories)} kcal — ${STATUS_LABELS[day.status]}`
-                }
-                className={`flex aspect-square items-center justify-center rounded text-xs font-medium ${
-                  STATUS_COLORS[day.status]
-                } ${day.status === 'empty' ? 'text-slate-400' : 'text-white'}`}
-              >
-                {dayOfMonth(day.date)}
-              </div>
-            ))}
-          </div>
-          {/* Legend */}
-          <div className="mt-4 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-500">
-            {(['under', 'in-range', 'over', 'empty'] as CalorieStatus[]).map((status) => (
-              <span key={status} className="flex items-center gap-1.5">
-                <span className={`inline-block h-3 w-3 rounded ${STATUS_COLORS[status]}`} />
-                {STATUS_LABELS[status]}
-              </span>
-            ))}
-          </div>
-        </section>
+        {/* Calorie & protein ceiling/floor heatmaps */}
+        <HeatmapCard days={calorieDays} leadingBlanks={leadingBlanks} config={CALORIE_HEATMAP} />
+        <HeatmapCard days={proteinDays} leadingBlanks={leadingBlanks} config={PROTEIN_HEATMAP} />
 
-        {/* Top 5 most frequent foods */}
+        {/* Top 10 most frequent foods */}
         <section aria-label="Top foods" className={cardClass}>
           <h2 className="mb-1 text-lg font-semibold text-slate-900">Most-logged foods</h2>
           <p className="mb-4 text-sm text-slate-500">Your 10 most frequent foods this month.</p>

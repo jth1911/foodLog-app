@@ -9,57 +9,63 @@ import {
   totalsForDate,
   type FoodEntry,
   type GoalChange,
+  type MacroKey,
 } from './nutrition'
 import { roundMacro } from './foods'
 
-// Half-width of the "in range" calorie band, as a fraction of the day's calorie
-// goal. The goal is treated as the midpoint, so floor = goal × (1 − band) and
-// ceiling = goal × (1 + band). A ±10% band gives a 20% green window centred on
-// the target.
-export const CALORIE_BAND = 0.1
+// Half-width of the "in range" band around a macro goal, as a fraction of that
+// day's goal. The goal is treated as the midpoint, so floor = goal × (1 − band)
+// and ceiling = goal × (1 + band). A ±10% band gives a 20% window centred on the
+// target. Shared by every macro heatmap (calories, protein, …).
+export const GOAL_BAND = 0.1
 
-// How a day's calorie intake sits against its goal band. 'empty' is distinct
-// from 'under' so a day with no log entries renders neutral, not as starvation.
-export type CalorieStatus = 'empty' | 'under' | 'in-range' | 'over'
+// Where a day's macro intake sits relative to its goal band — purely positional,
+// so it's direction-agnostic (the report assigns colours per macro, since
+// "under" is good for calories but bad for protein). 'empty' is distinct from
+// 'under' so a day with no log entries renders neutral, not as a miss.
+export type BandStatus = 'empty' | 'under' | 'in-range' | 'over'
 
 export type HeatmapDay = {
   date: string
-  calories: number
+  // The day's total for the macro this heatmap tracks (kcal or grams).
+  value: number
   // Number of log entries that day, so the cell can tell "no food logged"
-  // (empty) apart from "logged but zero calories".
+  // (empty) apart from "logged but zero of this macro".
   entryCount: number
-  status: CalorieStatus
+  status: BandStatus
 }
 
 /**
- * Per-day calorie totals across the month, each classified against the calorie
- * goal *in effect on that day* (so an effective-dated goal change mid-month is
+ * Per-day totals for `macro` across the month, each classified against the goal
+ * *in effect on that day* (so an effective-dated goal change mid-month is
  * respected). A day with no entries is 'empty' (neutral); otherwise it is
  * 'under' below the floor, 'over' above the ceiling, or 'in-range' between them.
+ * Classification is positional only — callers colour the bands per macro.
  */
-export function calorieHeatmap(
+export function macroHeatmap(
   entries: FoodEntry[],
   goalHistory: GoalChange[],
   dates: string[],
+  macro: MacroKey,
 ): HeatmapDay[] {
-  // One pass to count entries per date, so an all-zero-calorie logged day still
-  // reads as logged rather than empty.
+  // One pass to count entries per date, so an all-zero logged day still reads as
+  // logged rather than empty.
   const countByDate = new Map<string, number>()
   for (const food of entries) {
     countByDate.set(food.date, (countByDate.get(food.date) ?? 0) + 1)
   }
   return dates.map((date) => {
-    const calories = totalsForDate(entries, date).calories
+    const value = totalsForDate(entries, date)[macro]
     const entryCount = countByDate.get(date) ?? 0
-    const goal = goalsForDate(goalHistory, date).calories
-    const floor = goal * (1 - CALORIE_BAND)
-    const ceiling = goal * (1 + CALORIE_BAND)
-    let status: CalorieStatus
+    const goal = goalsForDate(goalHistory, date)[macro]
+    const floor = goal * (1 - GOAL_BAND)
+    const ceiling = goal * (1 + GOAL_BAND)
+    let status: BandStatus
     if (entryCount === 0) status = 'empty'
-    else if (calories < floor) status = 'under'
-    else if (calories > ceiling) status = 'over'
+    else if (value < floor) status = 'under'
+    else if (value > ceiling) status = 'over'
     else status = 'in-range'
-    return { date, calories, entryCount, status }
+    return { date, value, entryCount, status }
   })
 }
 
