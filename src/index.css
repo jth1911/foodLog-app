@@ -1,1 +1,8 @@
 @import "tailwindcss";
+
+/* Height of the sticky tab bar. Page headers pin just beneath it via
+   `top-[var(--tab-bar-height)]`; the value is set slightly under the bar's
+   natural height so the header tucks under it (no gap/flicker band). */
+:root {
+  --tab-bar-height: 2.75rem;
+}

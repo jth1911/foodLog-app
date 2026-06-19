@@ -233,7 +233,7 @@ function FoodsPage({
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
-      <header className="mb-6">
+      <header className="sticky top-[var(--tab-bar-height)] z-20 mb-6 bg-slate-50">
         <h1 className="text-2xl font-bold text-slate-900">Foods</h1>
         <p className="text-sm text-slate-500">
           Tap a food to start a log entry pre-filled with its macros, or manage your library below.
@@ -312,7 +312,7 @@ function FoodsPage({
           ))}
         </div>
 
-        <aside className="space-y-6 lg:w-72">
+        <aside className="space-y-6 lg:sticky lg:top-[calc(var(--tab-bar-height)+4rem)] lg:max-h-[calc(100vh-var(--tab-bar-height)-5rem)] lg:w-72 lg:self-start lg:overflow-y-auto lg:pr-1">
           {/* Add / edit food */}
           <section
             ref={formSectionRef}

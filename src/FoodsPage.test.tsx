@@ -347,4 +347,25 @@ describe('FoodsPage', () => {
       expect(carbs).toHaveValue(27)
     })
   })
+
+  describe('sticky add-food / add-category panel', () => {
+    // The right-hand column (Add food + Add category forms) should stay visible
+    // while the food list scrolls. On large screens it's a sticky flex child:
+    // self-start keeps it at its natural height (a stretched flex item can't
+    // stick), and the top offset clears the tab bar plus the page header. The
+    // combined forms can be taller than the viewport, so the column is capped to
+    // the visible height and scrolls internally — keeping both forms reachable
+    // while pinned.
+    it('keeps the form column sticky below the header on large screens', () => {
+      renderPage()
+      const aside = screen.getByRole('complementary')
+      expect(aside).toHaveClass(
+        'lg:sticky',
+        'lg:self-start',
+        'lg:top-[calc(var(--tab-bar-height)+4rem)]',
+        'lg:max-h-[calc(100vh-var(--tab-bar-height)-5rem)]',
+        'lg:overflow-y-auto',
+      )
+    })
+  })
 })
