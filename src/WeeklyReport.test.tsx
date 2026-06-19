@@ -29,6 +29,7 @@ vi.mock('recharts', () => {
     Line: () => null,
     Bar: ({ children }: { children?: React.ReactNode }) => <div>{children}</div>,
     Cell: () => null,
+    LabelList: () => null,
     XAxis: () => null,
     YAxis: () => null,
     CartesianGrid: () => null,
@@ -82,12 +83,6 @@ const refFood = (food: string): UserFoodReference => ({
 const library: Record<string, UserFoodReference[]> = {
   'Meat/Poultry': [refFood('Chicken breast')],
   'Dairy/Eggs': [refFood('Greek yogurt')],
-}
-
-// The chart-data the mocked Pie inside a named region was handed.
-function pieDataIn(regionName: string): unknown[] {
-  const region = screen.getByRole('region', { name: regionName })
-  return JSON.parse(region.querySelector('[data-testid="chart-data"]')!.textContent!)
 }
 
 describe('WeeklyReport', () => {
@@ -187,7 +182,7 @@ describe('WeeklyReport', () => {
     expect(ref!.getAttribute('data-y')).toBe('170')
   })
 
-  it('feeds the protein pie its visible food-group slices from the library', () => {
+  it('feeds the protein bar chart its visible food-group slices from the library', () => {
     const entries = [
       entry({ date: TODAY, description: 'Chicken breast', protein: 30 }),
       entry({ date: '2026-06-16', description: 'Greek yogurt', protein: 10 }),
@@ -196,13 +191,26 @@ describe('WeeklyReport', () => {
     render(
       <WeeklyReport loggedFoods={entries} goalHistory={goals} foods={library} today={TODAY} />,
     )
-    const data = pieDataIn('Protein sources') as Array<{ category: string; protein: number }>
+    const data = chartDataIn('Protein sources') as Array<{ category: string; protein: number }>
     const byCategory = Object.fromEntries(data.map((d) => [d.category, d.protein]))
     expect(byCategory['Meat/Poultry']).toBe(30)
     expect(byCategory['Dairy/Eggs']).toBe(10)
     expect(byCategory['Other']).toBe(10)
-    // Empty groups are filtered out of the pie's data.
+    // Empty groups are filtered out of the chart's data.
     expect(byCategory['Seafood']).toBeUndefined()
+  })
+
+  it('sorts the protein bars descending by protein so the dominant source leads', () => {
+    const entries = [
+      entry({ date: TODAY, description: 'Greek yogurt', protein: 10 }),
+      entry({ date: '2026-06-16', description: 'Chicken breast', protein: 30 }),
+      entry({ date: '2026-06-15', description: 'Mystery bar', protein: 20 }), // → Other
+    ]
+    render(
+      <WeeklyReport loggedFoods={entries} goalHistory={goals} foods={library} today={TODAY} />,
+    )
+    const data = chartDataIn('Protein sources') as Array<{ category: string; protein: number }>
+    expect(data.map((d) => d.category)).toEqual(['Meat/Poultry', 'Other', 'Dairy/Eggs'])
   })
 
   describe('fluid intake', () => {

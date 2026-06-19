@@ -4,6 +4,7 @@ import {
   BarChart,
   CartesianGrid,
   Cell,
+  LabelList,
   Legend,
   Line,
   LineChart,
@@ -201,7 +202,12 @@ function WeeklyReport({
   const hasCalories = mealData.some((m) => m.calories > 0)
   const visibleSlices = mealData.filter((m) => m.calories > 0)
   const hasProtein = proteinSourceData.some((p) => p.protein > 0)
-  const visibleProteinSlices = proteinSourceData.filter((p) => p.protein > 0)
+  // Drop empty food groups, then order bars by protein descending so the
+  // dominant source leads — a bar chart gives each group its own row, so labels
+  // no longer collide the way many near-zero pie slices did (issue #57).
+  const visibleProteinSlices = proteinSourceData
+    .filter((p) => p.protein > 0)
+    .sort((a, b) => b.protein - a.protein)
   const hasFluid = fluidData.some((d) => d.oz > 0)
   const activeTypes = activeDrinkTypes(fluidTypeData)
   const hasWeight = weightData.some((d) => d.lb != null)
@@ -461,26 +467,41 @@ function WeeklyReport({
           {hasProtein ? (
             <div className="h-72 w-full">
               <ResponsiveContainer width="100%" height="100%">
-                <PieChart>
-                  <Pie
-                    data={visibleProteinSlices}
-                    dataKey="protein"
-                    nameKey="category"
-                    cx="50%"
-                    cy="50%"
-                    outerRadius={100}
-                    label={renderSliceLabel}
-                  >
+                <BarChart
+                  layout="vertical"
+                  data={visibleProteinSlices}
+                  margin={{ top: 4, right: 40, bottom: 4, left: 8 }}
+                >
+                  <CartesianGrid horizontal={false} stroke="#e2e8f0" />
+                  <XAxis
+                    type="number"
+                    domain={[0, 100]}
+                    tickFormatter={(value: number) => `${value}%`}
+                  />
+                  <YAxis type="category" dataKey="category" width={110} tick={{ fontSize: 12 }} />
+                  <Tooltip
+                    formatter={(_value, _name, item) => [
+                      `${item?.payload?.protein} g (${item?.payload?.share}%)`,
+                      item?.payload?.category,
+                    ]}
+                  />
+                  {/* Animation off so the value LabelList paints reliably — on an
+                      animated Bar with Cells, Recharts drops the labels (#57). */}
+                  <Bar dataKey="share" isAnimationActive={false}>
                     {visibleProteinSlices.map((slice) => (
                       <Cell
                         key={slice.category}
                         fill={PROTEIN_SOURCE_COLORS[slice.category] ?? '#64748b'}
                       />
                     ))}
-                  </Pie>
-                  <Tooltip formatter={(value, name) => [`${value} g`, name]} />
-                  <Legend />
-                </PieChart>
+                    <LabelList
+                      dataKey="share"
+                      position="right"
+                      formatter={(value) => `${value}%`}
+                      className="fill-slate-600 text-xs"
+                    />
+                  </Bar>
+                </BarChart>
               </ResponsiveContainer>
             </div>
           ) : (
