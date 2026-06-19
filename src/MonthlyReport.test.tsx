@@ -153,6 +153,34 @@ describe('MonthlyReport', () => {
     expect(heatmap.getByTitle('2026-06-05: 150 g — Hit').className).toContain('bg-emerald-500')
   })
 
+  it('shows each logged calorie day total in its cell, with a thousands separator', () => {
+    const entries = [entry({ date: '2026-06-03', calories: 2140 })]
+    render(<MonthlyReport loggedFoods={entries} goalHistory={goals(2000)} today={TODAY} />)
+    const heatmap = within(screen.getByLabelText('Calorie heatmap'))
+    expect(heatmap.getByTitle('2026-06-03: 2140 kcal — Near goal')).toHaveTextContent('2,140')
+  })
+
+  it('shows each logged protein day total in its cell, suffixed with g', () => {
+    const entries = [entry({ date: '2026-06-03', protein: 138 })]
+    render(<MonthlyReport loggedFoods={entries} goalHistory={goals(2000)} today={TODAY} />)
+    const heatmap = within(screen.getByLabelText('Protein heatmap'))
+    expect(heatmap.getByTitle('2026-06-03: 138 g — Hit')).toHaveTextContent('138g')
+  })
+
+  it('rounds the in-cell value to a whole number', () => {
+    const entries = [entry({ date: '2026-06-03', protein: 137.6 })]
+    render(<MonthlyReport loggedFoods={entries} goalHistory={goals(2000)} today={TODAY} />)
+    const heatmap = within(screen.getByLabelText('Protein heatmap'))
+    expect(heatmap.getByTitle('2026-06-03: 138 g — Hit')).toHaveTextContent('138g')
+  })
+
+  it('shows no value on unlogged days — only the day number', () => {
+    render(<MonthlyReport loggedFoods={[]} goalHistory={goals(2000)} today={TODAY} />)
+    const heatmap = within(screen.getByLabelText('Calorie heatmap'))
+    // An empty day carries just its day-of-month, never a macro value.
+    expect(heatmap.getByTitle('2026-06-06: no log').textContent).toBe('6')
+  })
+
   describe('weight trend', () => {
     const weights = [
       { date: '2026-06-01', lb: 180 },
