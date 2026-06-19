@@ -76,6 +76,28 @@ export type UserFoodReference = {
   fiber?: number
 }
 
+// Case-insensitive string compare so "apple" and "Apple" sort identically —
+// used for both category names and food names.
+const byNameCI = (a: string, b: string) =>
+  a.localeCompare(b, undefined, { sensitivity: 'base' })
+
+/**
+ * Return a copy of the foods record with categories (object keys) in
+ * case-insensitive A–Z order and each category's foods sorted A–Z by name.
+ * Pure — the input record and its arrays are left untouched. Applied at every
+ * foods mutation (and on load) so the library always reads in alphabetical
+ * order regardless of insertion or storage order.
+ */
+export function sortFoodsState(
+  foods: Record<string, UserFoodReference[]>,
+): Record<string, UserFoodReference[]> {
+  const sorted: Record<string, UserFoodReference[]> = {}
+  for (const category of Object.keys(foods).sort(byNameCI)) {
+    sorted[category] = [...foods[category]].sort((a, b) => byNameCI(a.food, b.food))
+  }
+  return sorted
+}
+
 // Unit/descriptor words that don't identify a food, dropped from tokens so a
 // library name keys on what matters — "Greek yogurt (non fat, plain)" → greek,
 // yogurt; "Chicken Breast (skinless)" → chicken, breast.

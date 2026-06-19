@@ -2,7 +2,7 @@ import { describe, expect, it } from 'vitest'
 import { act, renderHook } from '@testing-library/react'
 import { useFoodLog, SEED_FOODS } from './useFoodLog'
 import type { FoodLogStore } from './lib/foodLogRepo'
-import { seedFoodsFromJson, type UserFoodReference } from './lib/foods'
+import { seedFoodsFromJson, sortFoodsState, type UserFoodReference } from './lib/foods'
 import { type WeightEntry } from './lib/weight'
 import { type FluidEntry } from './lib/fluid'
 import { DEFAULT_GOALS, GOALS_EPOCH, type FoodEntry, type GoalChange, type Goals } from './lib/nutrition'
@@ -222,9 +222,9 @@ describe('useFoodLog — reference foods', () => {
     Custom: [{ id: 'f1', food: 'Protein bar', serving_size: '1 bar', protein: 20, carbs: 25, calories: 210 }],
   }
 
-  it('seeds the foods from the JSON when storage is empty', () => {
+  it('seeds the foods from the JSON when storage is empty, sorted alphabetically', () => {
     const { result } = renderHook(() => useFoodLog(makeFakeStore()))
-    expect(result.current.foods).toEqual(seedFoodsFromJson())
+    expect(result.current.foods).toEqual(sortFoodsState(seedFoodsFromJson()))
   })
 
   it('loads stored foods over the seed', () => {
@@ -280,6 +280,85 @@ describe('useFoodLog — reference foods', () => {
     const { result } = renderHook(() => useFoodLog(store))
     act(() => result.current.addCategory('Extra'))
     expect(store.loadFoods()).toHaveProperty('Extra')
+  })
+
+  it('presents stored foods sorted on load regardless of storage order', () => {
+    const unsorted: Record<string, UserFoodReference[]> = {
+      Veg: [
+        { id: 'v1', food: 'Spinach', serving_size: '1 cup', protein: 1, carbs: 1, calories: 7 },
+        { id: 'v2', food: 'Aubergine', serving_size: '1', protein: 1, carbs: 5, calories: 20 },
+      ],
+      Dairy: [],
+    }
+    const { result } = renderHook(() => useFoodLog(makeFakeStore(null, null, null, unsorted)))
+    expect(Object.keys(result.current.foods)).toEqual(['Dairy', 'Veg'])
+    expect(result.current.foods.Veg.map((f) => f.food)).toEqual(['Aubergine', 'Spinach'])
+  })
+
+  it('inserts an added food into its sorted position within the category', () => {
+    const stored: Record<string, UserFoodReference[]> = {
+      Beans: [
+        { id: 'b1', food: 'Black beans', serving_size: '1', protein: 8, carbs: 20, calories: 110 },
+        { id: 'b2', food: 'Lentils', serving_size: '1', protein: 9, carbs: 20, calories: 115 },
+      ],
+    }
+    const { result } = renderHook(() => useFoodLog(makeFakeStore(null, null, null, stored)))
+    act(() =>
+      result.current.addFood('Beans', {
+        food: 'Chickpeas',
+        serving_size: '1',
+        protein: 7,
+        carbs: 22,
+        calories: 120,
+      }),
+    )
+    expect(result.current.foods.Beans.map((f) => f.food)).toEqual([
+      'Black beans',
+      'Chickpeas',
+      'Lentils',
+    ])
+  })
+
+  it('inserts an added category into its sorted position', () => {
+    const { result } = renderHook(() =>
+      useFoodLog(makeFakeStore(null, null, null, { Apple: [], Cherry: [] })),
+    )
+    act(() => result.current.addCategory('Banana'))
+    expect(Object.keys(result.current.foods)).toEqual(['Apple', 'Banana', 'Cherry'])
+  })
+
+  it('re-sorts after renaming a food', () => {
+    const stored: Record<string, UserFoodReference[]> = {
+      Beans: [
+        { id: 'b1', food: 'Black beans', serving_size: '1', protein: 8, carbs: 20, calories: 110 },
+        { id: 'b2', food: 'Chickpeas', serving_size: '1', protein: 7, carbs: 22, calories: 120 },
+      ],
+    }
+    const { result } = renderHook(() => useFoodLog(makeFakeStore(null, null, null, stored)))
+    act(() =>
+      result.current.updateFood('Beans', {
+        id: 'b1',
+        food: 'Zebra beans',
+        serving_size: '1',
+        protein: 8,
+        carbs: 20,
+        calories: 110,
+      }),
+    )
+    expect(result.current.foods.Beans.map((f) => f.food)).toEqual(['Chickpeas', 'Zebra beans'])
+  })
+
+  it('leaves the remaining foods sorted after a delete', () => {
+    const stored: Record<string, UserFoodReference[]> = {
+      Beans: [
+        { id: 'b1', food: 'Black beans', serving_size: '1', protein: 8, carbs: 20, calories: 110 },
+        { id: 'b2', food: 'Chickpeas', serving_size: '1', protein: 7, carbs: 22, calories: 120 },
+        { id: 'b3', food: 'Lentils', serving_size: '1', protein: 9, carbs: 20, calories: 115 },
+      ],
+    }
+    const { result } = renderHook(() => useFoodLog(makeFakeStore(null, null, null, stored)))
+    act(() => result.current.deleteFood('Beans', 'b2'))
+    expect(result.current.foods.Beans.map((f) => f.food)).toEqual(['Black beans', 'Lentils'])
   })
 })
 

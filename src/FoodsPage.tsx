@@ -96,7 +96,12 @@ function FoodsPage({
   addCategory,
   deleteCategory,
 }: FoodsPageProps) {
-  const categories = Object.keys(foods)
+  // The state object is kept sorted at the source (see useFoodLog), so this
+  // mirrors that order; the explicit case-insensitive sort is defensive and
+  // documents that categories are meant to read A–Z.
+  const categories = Object.keys(foods).sort((a, b) =>
+    a.localeCompare(b, undefined, { sensitivity: 'base' }),
+  )
   const [form, setForm] = useState<FoodForm>(blankForm)
   // The category the form targets; defaults to the first existing category.
   const [targetCategory, setTargetCategory] = useState('')

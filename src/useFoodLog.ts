@@ -7,7 +7,7 @@ import {
   type Goals,
 } from './lib/nutrition'
 import { localStorageStore, type FoodLogStore } from './lib/foodLogRepo'
-import { seedFoodsFromJson, type UserFoodReference } from './lib/foods'
+import { seedFoodsFromJson, sortFoodsState, type UserFoodReference } from './lib/foods'
 import { type WeightEntry } from './lib/weight'
 import { DEFAULT_TARGET_FLUID, type FluidEntry } from './lib/fluid'
 import { isoWeekOf, weekdayOf } from './lib/dates'
@@ -170,8 +170,10 @@ function initialGoalHistory(store: FoodLogStore): GoalChange[] {
 export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   const [entries, setEntries] = useState<FoodEntry[]>(() => store.loadEntries() ?? SEED_FOODS)
   const [goalHistory, setGoalHistory] = useState<GoalChange[]>(() => initialGoalHistory(store))
-  const [foods, setFoods] = useState<Record<string, UserFoodReference[]>>(
-    () => store.loadFoods() ?? seedFoodsFromJson(),
+  // Sort on load so the library reads A–Z no matter what order it was stored or
+  // seeded in; every mutation below keeps it sorted from there.
+  const [foods, setFoods] = useState<Record<string, UserFoodReference[]>>(() =>
+    sortFoodsState(store.loadFoods() ?? seedFoodsFromJson()),
   )
   // Start blank with no seeded weights. Only explicitly-recorded days are
   // stored — there's no automatic carry-forward (the dashboard's "pull forward"
@@ -261,30 +263,36 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
   const addFood = useCallback((category: string, food: Omit<UserFoodReference, 'id'>) => {
     log('info', 'Food added', { category, food: food.food })
     const withId: UserFoodReference = { ...food, id: crypto.randomUUID() }
-    setFoods((prev) => ({ ...prev, [category]: [...(prev[category] ?? []), withId] }))
+    setFoods((prev) =>
+      sortFoodsState({ ...prev, [category]: [...(prev[category] ?? []), withId] }),
+    )
   }, [])
 
   const updateFood = useCallback((category: string, food: UserFoodReference) => {
     log('info', 'Food updated', { category, food: food.food })
-    setFoods((prev) => ({
-      ...prev,
-      [category]: (prev[category] ?? []).map((f) => (f.id === food.id ? food : f)),
-    }))
+    setFoods((prev) =>
+      sortFoodsState({
+        ...prev,
+        [category]: (prev[category] ?? []).map((f) => (f.id === food.id ? food : f)),
+      }),
+    )
   }, [])
 
   const deleteFood = useCallback((category: string, id: string) => {
     log('info', 'Food deleted', { category, id })
-    setFoods((prev) => ({
-      ...prev,
-      [category]: (prev[category] ?? []).filter((f) => f.id !== id),
-    }))
+    setFoods((prev) =>
+      sortFoodsState({
+        ...prev,
+        [category]: (prev[category] ?? []).filter((f) => f.id !== id),
+      }),
+    )
   }, [])
 
   // Add an empty named bucket. A name that already exists is left untouched so
   // adding doesn't wipe an existing category's foods.
   const addCategory = useCallback((name: string) => {
     log('info', 'Category added', { name })
-    setFoods((prev) => (name in prev ? prev : { ...prev, [name]: [] }))
+    setFoods((prev) => (name in prev ? prev : sortFoodsState({ ...prev, [name]: [] })))
   }, [])
 
   const deleteCategory = useCallback((name: string) => {
@@ -292,7 +300,7 @@ export function useFoodLog(store: FoodLogStore = localStorageStore): FoodLog {
     setFoods((prev) => {
       const next = { ...prev }
       delete next[name]
-      return next
+      return sortFoodsState(next)
     })
   }, [])
 
