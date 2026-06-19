@@ -6,6 +6,7 @@ import {
   roundMacro,
   scaleMacros,
   seedFoodsFromJson,
+  sortFoodsState,
   tokenizeFoodName,
   type FoodReference,
   type UserFoodReference,
@@ -205,5 +206,49 @@ describe('tokenizeFoodName', () => {
   it('shares tokens between a verbose entry and its generic library name', () => {
     const entry = new Set(tokenizeFoodName('Stonyfield Organic Greek Plain Nonfat Yogurt'))
     expect(tokenizeFoodName('Greek yogurt (non fat, plain)').every((t) => entry.has(t))).toBe(true)
+  })
+})
+
+describe('sortFoodsState', () => {
+  const food = (id: string, name: string): UserFoodReference => ({
+    id,
+    food: name,
+    serving_size: '1',
+    protein: 0,
+    carbs: 0,
+    calories: 0,
+  })
+
+  it('sorts categories alphabetically', () => {
+    const sorted = sortFoodsState({ Veg: [], Dairy: [], Beans: [] })
+    expect(Object.keys(sorted)).toEqual(['Beans', 'Dairy', 'Veg'])
+  })
+
+  it('sorts foods within each category alphabetically by name', () => {
+    const sorted = sortFoodsState({
+      Beans: [food('1', 'Lentils'), food('2', 'Black beans'), food('3', 'Chickpeas')],
+    })
+    expect(sorted.Beans.map((f) => f.food)).toEqual(['Black beans', 'Chickpeas', 'Lentils'])
+  })
+
+  it('sorts case-insensitively for both categories and foods', () => {
+    const sorted = sortFoodsState({
+      banana: [food('1', 'apple'), food('2', 'Apricot')],
+      Avocado: [],
+    })
+    expect(Object.keys(sorted)).toEqual(['Avocado', 'banana'])
+    expect(sorted.banana.map((f) => f.food)).toEqual(['apple', 'Apricot'])
+  })
+
+  it('does not mutate the input record or its arrays', () => {
+    const input = { B: [food('1', 'Zucchini'), food('2', 'Aubergine')], A: [] }
+    const before = JSON.stringify(input)
+    sortFoodsState(input)
+    expect(JSON.stringify(input)).toBe(before)
+  })
+
+  it('handles empty categories and an empty record', () => {
+    expect(sortFoodsState({})).toEqual({})
+    expect(sortFoodsState({ Empty: [] })).toEqual({ Empty: [] })
   })
 })

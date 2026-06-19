@@ -50,6 +50,15 @@ describe('FoodsPage', () => {
     expect(screen.getByRole('heading', { name: 'Empty' })).toBeInTheDocument()
   })
 
+  it('renders categories in case-insensitive alphabetical order regardless of prop order', () => {
+    renderPage({ foods: { veg: [], Apple: [], dairy: [] } })
+    const headings = screen
+      .getAllByRole('heading', { level: 2 })
+      .map((h) => h.textContent)
+      .filter((t) => ['Apple', 'dairy', 'veg'].includes(t ?? ''))
+    expect(headings).toEqual(['Apple', 'dairy', 'veg'])
+  })
+
   it('shows each food with its name, serving size and macros', () => {
     renderPage()
     const row = screen.getByRole('button', { name: 'Egg' })
