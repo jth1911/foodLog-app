@@ -312,7 +312,7 @@ function FoodsPage({
           ))}
         </div>
 
-        <aside className="space-y-6 lg:w-72">
+        <aside className="space-y-6 lg:sticky lg:top-[calc(var(--tab-bar-height)+4rem)] lg:max-h-[calc(100vh-var(--tab-bar-height)-5rem)] lg:w-72 lg:self-start lg:overflow-y-auto lg:pr-1">
           {/* Add / edit food */}
           <section
             ref={formSectionRef}
