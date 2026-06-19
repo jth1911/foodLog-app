@@ -41,7 +41,11 @@ type HeatmapConfig = {
   ariaLabel: string
   title: string
   description: string
+  // Unit shown in the cell's hover tooltip, e.g. "kcal" / "g".
   unit: string
+  // Suffix appended to the value rendered inside each cell. Empty for calories
+  // (the number alone is wide enough), "g" for protein so 138 reads as "138g".
+  cellSuffix: string
   colors: Record<BandStatus, string>
   labels: Record<BandStatus, string>
   // Legend order, good → bad, so the colour the user wants to see leads.
@@ -61,6 +65,7 @@ const CALORIE_HEATMAP: HeatmapConfig = {
   description:
     'Each logged day against its calorie goal — green is comfortably under, amber nearing it, red over.',
   unit: 'kcal',
+  cellSuffix: '',
   colors: { under: GREEN, 'in-range': AMBER, over: RED, empty: NEUTRAL },
   labels: { under: 'Under', 'in-range': 'Near goal', over: 'Surplus', empty: 'No log' },
   legend: ['under', 'in-range', 'over', 'empty'],
@@ -74,6 +79,7 @@ const PROTEIN_HEATMAP: HeatmapConfig = {
   description:
     'Each logged day against its protein goal — green hit the target, amber nearing it, red missed.',
   unit: 'g',
+  cellSuffix: 'g',
   colors: { over: GREEN, 'in-range': AMBER, under: RED, empty: NEUTRAL },
   labels: { over: 'Hit', 'in-range': 'Near goal', under: 'Missed', empty: 'No log' },
   legend: ['over', 'in-range', 'under', 'empty'],
@@ -127,6 +133,13 @@ const WEEKDAY_HEADS = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun']
 // Day-of-month from an ISO date, without timezone drift (the day part verbatim).
 function dayOfMonth(iso: string): number {
   return Number(iso.slice(8, 10))
+}
+
+// A day's macro total as shown inside a heatmap cell: rounded to a whole number
+// with a thousands separator (so calories read "2,140"), plus the macro's cell
+// suffix (e.g. "g" for protein → "138g").
+function formatCellValue(value: number, suffix: string): string {
+  return `${Math.round(value).toLocaleString('en-US')}${suffix}`
 }
 
 // Monday-first weekday index (Mon=0 … Sun=6) for an ISO date, in UTC.
@@ -183,11 +196,16 @@ function HeatmapCard({
                 ? `${day.date}: no log`
                 : `${day.date}: ${Math.round(day.value)} ${config.unit} — ${config.labels[day.status]}`
             }
-            className={`flex aspect-square items-center justify-center rounded text-xs font-medium ${
+            className={`flex aspect-square flex-col items-center justify-center gap-1.5 rounded font-medium tabular-nums ${
               config.colors[day.status]
             } ${day.status === 'empty' ? 'text-slate-400' : 'text-white'}`}
           >
-            {dayOfMonth(day.date)}
+            <span className="text-xs leading-none">{dayOfMonth(day.date)}</span>
+            {day.entryCount > 0 && (
+              <span className="text-xs font-semibold leading-tight sm:text-sm">
+                {formatCellValue(day.value, config.cellSuffix)}
+              </span>
+            )}
           </div>
         ))}
       </div>
