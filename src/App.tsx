@@ -34,7 +34,7 @@ function App() {
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800">
-      <nav className="border-b border-slate-200 bg-white">
+      <nav className="sticky top-0 z-30 border-b border-slate-200 bg-white">
         <div
           role="tablist"
           aria-label="Sections"

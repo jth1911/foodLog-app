@@ -234,7 +234,7 @@ function GoalsPage({
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
-      <header className="mb-6">
+      <header className="sticky top-[var(--tab-bar-height)] z-20 mb-6 bg-slate-50">
         <h1 className="text-2xl font-bold text-slate-900">Goals</h1>
         <p className="text-sm text-slate-500">
           Each change applies from its date forward, until the next one. Days are measured against

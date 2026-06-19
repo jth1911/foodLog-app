@@ -233,7 +233,7 @@ function FoodsPage({
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
-      <header className="mb-6">
+      <header className="sticky top-[var(--tab-bar-height)] z-20 mb-6 bg-slate-50">
         <h1 className="text-2xl font-bold text-slate-900">Foods</h1>
         <p className="text-sm text-slate-500">
           Tap a food to start a log entry pre-filled with its macros, or manage your library below.

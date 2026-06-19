@@ -105,3 +105,39 @@ describe('App tab navigation', () => {
     expect(within(dialog).getByLabelText('Protein')).toHaveValue(null)
   })
 })
+
+describe('App sticky header', () => {
+  beforeEach(() => localStorage.clear())
+
+  it('pins the tab navigation bar to the top while scrolling', () => {
+    render(<App />)
+    const nav = screen.getByRole('tablist').closest('nav')!
+    expect(nav).toHaveClass('sticky', 'top-0', 'z-30')
+  })
+
+  // Each page heading lives in a <header> that should pin just below the tab bar
+  // (top offset driven by the shared --tab-bar-height variable) with a z-index
+  // above the scrolling content and an opaque background so content can't bleed
+  // through.
+  const PAGES: { tab: string; heading: string }[] = [
+    { tab: 'Dashboard', heading: 'Food Log' },
+    { tab: 'Foods', heading: 'Foods' },
+    { tab: 'Goals', heading: 'Goals' },
+    { tab: 'Weekly', heading: 'Weekly report' },
+    { tab: 'Monthly', heading: 'Monthly report' },
+  ]
+
+  it.each(PAGES)('pins the $tab page header below the tab bar', async ({ tab, heading }) => {
+    const user = userEvent.setup()
+    render(<App />)
+    await user.click(screen.getByRole('tab', { name: tab }))
+
+    const header = screen.getByRole('heading', { name: heading }).closest('header')!
+    expect(header).toHaveClass(
+      'sticky',
+      'top-[var(--tab-bar-height)]',
+      'z-20',
+      'bg-slate-50',
+    )
+  })
+})
