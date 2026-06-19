@@ -196,13 +196,13 @@ function HeatmapCard({
                 ? `${day.date}: no log`
                 : `${day.date}: ${Math.round(day.value)} ${config.unit} — ${config.labels[day.status]}`
             }
-            className={`flex aspect-square flex-col items-center justify-center rounded font-medium tabular-nums ${
+            className={`flex aspect-square flex-col items-center justify-center gap-1.5 rounded font-medium tabular-nums ${
               config.colors[day.status]
             } ${day.status === 'empty' ? 'text-slate-400' : 'text-white'}`}
           >
-            <span className="text-[9px] leading-none opacity-80">{dayOfMonth(day.date)}</span>
+            <span className="text-xs leading-none">{dayOfMonth(day.date)}</span>
             {day.entryCount > 0 && (
-              <span className="text-[10px] leading-tight sm:text-xs">
+              <span className="text-xs font-semibold leading-tight sm:text-sm">
                 {formatCellValue(day.value, config.cellSuffix)}
               </span>
             )}
