@@ -1,13 +1,15 @@
 import { useRef, useState, type FormEvent } from 'react'
 import { type UserFoodReference } from './lib/foods'
-import { type NewFoodInput } from './AddFoodModal'
+import { type FoodPrefill, type NewFoodInput } from './AddFoodModal'
+import { todayIso } from './lib/dates'
 import { estimateMacros, isGeminiConfigured, mergeEmptyMacros } from './lib/gemini'
 
 type FoodsPageProps = {
   // The user-managed reference foods, keyed by category.
   foods: Record<string, UserFoodReference[]>
-  // Raised when a food's log action is used, with the macros mapped for AddFoodModal.
-  onSelectFood: (values: Partial<NewFoodInput>) => void
+  // Raised when a food's log action is used, with the macros mapped for
+  // AddFoodModal plus the targetDate chosen in the page's date picker.
+  onSelectFood: (values: FoodPrefill) => void
   addFood: (category: string, food: Omit<UserFoodReference, 'id'>) => void
   updateFood: (category: string, food: UserFoodReference) => void
   deleteFood: (category: string, id: string) => void
@@ -103,6 +105,9 @@ function FoodsPage({
     a.localeCompare(b, undefined, { sensitivity: 'base' }),
   )
   const [form, setForm] = useState<FoodForm>(blankForm)
+  // The day a clicked food is logged to. Defaults to today; capped at today so
+  // entries can be back-filled to past days but never logged into the future.
+  const [logDate, setLogDate] = useState(todayIso())
   // The category the form targets; defaults to the first existing category.
   const [targetCategory, setTargetCategory] = useState('')
   // When set, the form is editing this existing food (category locked).
@@ -233,11 +238,24 @@ function FoodsPage({
 
   return (
     <div className="mx-auto max-w-5xl px-4 py-8">
-      <header className="sticky top-[var(--tab-bar-height)] z-20 mb-6 bg-slate-50">
-        <h1 className="text-2xl font-bold text-slate-900">Foods</h1>
-        <p className="text-sm text-slate-500">
-          Tap a food to start a log entry pre-filled with its macros, or manage your library below.
-        </p>
+      <header className="sticky top-[var(--tab-bar-height)] z-20 mb-6 flex flex-col gap-3 bg-slate-50 sm:flex-row sm:items-end sm:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">Foods</h1>
+          <p className="text-sm text-slate-500">
+            Tap a food to start a log entry pre-filled with its macros, or manage your library below.
+          </p>
+        </div>
+        <label className="flex shrink-0 items-center gap-2 text-sm text-slate-600">
+          Log to
+          <input
+            type="date"
+            aria-label="Log date"
+            value={logDate}
+            max={todayIso()}
+            onChange={(e) => setLogDate(e.target.value)}
+            className="rounded-md border border-slate-300 px-2 py-1 text-sm text-slate-800 focus:border-slate-500 focus:outline-none"
+          />
+        </label>
       </header>
 
       <div className="flex flex-col gap-6 lg:flex-row">
@@ -272,7 +290,7 @@ function FoodsPage({
                       <button
                         type="button"
                         aria-label={food.food}
-                        onClick={() => onSelectFood(toFoodInput(food))}
+                        onClick={() => onSelectFood({ ...toFoodInput(food), targetDate: logDate })}
                         className="flex min-w-0 flex-1 items-center justify-between gap-4 rounded-lg px-2 py-2 text-left hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-slate-400"
                       >
                         <span className="min-w-0">

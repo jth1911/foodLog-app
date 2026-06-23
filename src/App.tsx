@@ -5,7 +5,7 @@ import GoalsPage from './GoalsPage'
 import WeeklyReport from './WeeklyReport'
 import MonthlyReport from './MonthlyReport'
 import { useFoodLog } from './useFoodLog'
-import { type NewFoodInput } from './AddFoodModal'
+import { type FoodPrefill } from './AddFoodModal'
 import LogViewer from './LogViewer'
 
 type Tab = 'dashboard' | 'foods' | 'goals' | 'weekly' | 'monthly'
@@ -21,13 +21,15 @@ const TABS: { id: Tab; label: string }[] = [
 function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard')
   // Macros handed up from the Foods page, waiting to pre-fill the add-food modal.
-  const [prefill, setPrefill] = useState<Partial<NewFoodInput> | null>(null)
+  // Carries an optional targetDate so the dashboard logs to the day the Foods
+  // panel picked rather than whatever day it currently shows.
+  const [prefill, setPrefill] = useState<FoodPrefill | null>(null)
   // One shared food-log store for the whole app, so the dashboard reflects goal
   // changes made on the Goals tab (and vice versa) without a remount.
   const foodLog = useFoodLog()
 
   // Picking a reference food jumps to the dashboard and opens the modal pre-filled.
-  const handleSelectFood = (values: Partial<NewFoodInput>) => {
+  const handleSelectFood = (values: FoodPrefill) => {
     setPrefill(values)
     setActiveTab('dashboard')
   }
