@@ -17,6 +17,12 @@ export type NewFoodInput = {
   quantity?: number
 }
 
+// Macros handed up from the Foods page to pre-fill the modal, plus the day the
+// Foods panel targeted. targetDate rides alongside the food fields so the
+// dashboard can jump to that day before stamping the entry; it is stripped back
+// out before the values reach the modal (which only knows NewFoodInput fields).
+export type FoodPrefill = Partial<NewFoodInput> & { targetDate?: string }
+
 type AddFoodModalProps = {
   onAdd: (input: NewFoodInput) => void
   onClose: () => void

@@ -357,6 +357,60 @@ describe('Dashboard', () => {
     })
   })
 
+  // A prefill from the Foods page may target a past day; the view jumps there and
+  // the submitted entry is stamped with that day, not the landing date.
+  describe('prefill targetDate', () => {
+    afterEach(() => vi.restoreAllMocks())
+
+    const renderWithPrefill = (today: string, addEntry: (e: FoodEntry) => void) =>
+      render(
+        <DashboardView
+          today={today}
+          prefill={{
+            description: 'Egg',
+            protein: 6,
+            carbs: 1,
+            calories: 70,
+            servingSize: '1 large',
+            targetDate: '2026-05-08',
+          }}
+          loggedFoods={[]}
+          goalHistory={[]}
+          weights={[]}
+          addEntry={addEntry}
+          addEntries={() => {}}
+          deleteEntry={() => {}}
+          updateEntry={() => {}}
+          setWeight={() => {}}
+        />,
+      )
+
+    it('jumps the view to the targetDate and seeds the modal without leaking it', () => {
+      renderWithPrefill('2026-05-10', () => {})
+      // The view moved off the landing date (10 May) to the targeted 8 May.
+      expect(screen.getByRole('button', { name: 'Choose date' })).toHaveTextContent(
+        'Friday, 8 May 2026',
+      )
+      // The modal is pre-filled from the food; targetDate is not a modal field.
+      const dialog = screen.getByRole('dialog', { name: 'Add food' })
+      expect(within(dialog).getByLabelText('Food name')).toHaveValue('Egg')
+    })
+
+    it('stamps the submitted entry with the targetDate', async () => {
+      const addEntry = vi.fn()
+      const user = userEvent.setup()
+      renderWithPrefill('2026-05-10', addEntry)
+
+      const dialog = screen.getByRole('dialog', { name: 'Add food' })
+      await user.click(within(dialog).getByRole('button', { name: 'Add' }))
+
+      expect(addEntry).toHaveBeenCalledTimes(1)
+      const entry = addEntry.mock.calls[0][0]
+      expect(entry.date).toBe('2026-05-08')
+      expect(entry).not.toHaveProperty('targetDate')
+    })
+  })
+
   describe('fluids', () => {
     afterEach(() => vi.restoreAllMocks())
 

@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import App from './App'
+import { addDays, todayIso } from './lib/dates'
 
 describe('App tab navigation', () => {
   // The dashboard now persists to localStorage; clear it so entries added in one
@@ -87,6 +88,30 @@ describe('App tab navigation', () => {
     await user.click(within(dialog).getByRole('button', { name: 'Add' }))
     const log = screen.getByRole('region', { name: 'Food log' })
     expect(within(log).getByText('Egg')).toBeInTheDocument()
+  })
+
+  it('logs a food to the past date chosen on the Foods panel', async () => {
+    const user = userEvent.setup()
+    render(<App />)
+
+    // On Foods, target a day two days ago, then pick a food.
+    await user.click(screen.getByRole('tab', { name: 'Foods' }))
+    const past = addDays(todayIso(), -2)
+    fireEvent.change(screen.getByLabelText('Log date'), { target: { value: past } })
+    await user.click(screen.getByRole('button', { name: 'Egg' }))
+
+    // The dashboard jumped to the targeted day before the modal submits.
+    expect(screen.getByRole('tab', { name: 'Dashboard' })).toHaveAttribute('aria-selected', 'true')
+    const dialog = screen.getByRole('dialog', { name: 'Add food' })
+    await user.click(within(dialog).getByRole('button', { name: 'Add' }))
+
+    // The entry shows on the targeted past day...
+    const log = screen.getByRole('region', { name: 'Food log' })
+    expect(within(log).getByText('Egg')).toBeInTheDocument()
+
+    // ...and is absent from today, proving it wasn't logged to the landing day.
+    await user.click(screen.getByRole('button', { name: 'Today' }))
+    expect(within(log).queryByText('Egg')).not.toBeInTheDocument()
   })
 
   it('opens a blank modal from the FAB after a pre-filled selection was closed', async () => {

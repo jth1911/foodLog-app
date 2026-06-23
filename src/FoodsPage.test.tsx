@@ -1,9 +1,10 @@
 import { useState } from 'react'
 import { describe, it, expect, vi, afterEach } from 'vitest'
-import { render, screen, within } from '@testing-library/react'
+import { render, screen, within, fireEvent } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import FoodsPage from './FoodsPage'
 import { type UserFoodReference } from './lib/foods'
+import { addDays, todayIso } from './lib/dates'
 
 // The Gemini client is mocked: estimateMacros/isGeminiConfigured are controlled
 // per test, while the pure mergeEmptyMacros keeps its real (tested) behaviour.
@@ -73,13 +74,34 @@ describe('FoodsPage', () => {
     renderPage({ onSelectFood })
 
     await user.click(screen.getByRole('button', { name: 'Egg' }))
+    // The date picker defaults to today, so targetDate rides along as today.
     expect(onSelectFood).toHaveBeenCalledWith({
       description: 'Egg',
       servingSize: '1 large',
       protein: 6,
       carbs: 1,
       calories: 70,
+      targetDate: todayIso(),
     })
+  })
+
+  it('defaults the log-date picker to today and caps it at today', () => {
+    renderPage()
+    const picker = screen.getByLabelText('Log date')
+    expect(picker).toHaveValue(todayIso())
+    expect(picker).toHaveAttribute('max', todayIso())
+  })
+
+  it('forwards the picked past date as targetDate when a food is clicked', async () => {
+    const onSelectFood = vi.fn()
+    const user = userEvent.setup()
+    renderPage({ onSelectFood })
+
+    const past = addDays(todayIso(), -2)
+    fireEvent.change(screen.getByLabelText('Log date'), { target: { value: past } })
+    await user.click(screen.getByRole('button', { name: 'Egg' }))
+
+    expect(onSelectFood).toHaveBeenCalledWith(expect.objectContaining({ targetDate: past }))
   })
 
   it('passes optional fat/fiber through when the food carries them', async () => {

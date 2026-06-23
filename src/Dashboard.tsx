@@ -13,7 +13,7 @@ import {
 } from './lib/nutrition'
 import MealFeed from './MealFeed'
 import FluidSection from './FluidSection'
-import AddFoodModal, { type NewFoodInput } from './AddFoodModal'
+import AddFoodModal, { type FoodPrefill, type NewFoodInput } from './AddFoodModal'
 import AddFluidModal, { type NewFluidInput } from './AddFluidModal'
 import BulkImportModal from './BulkImportModal'
 import { addDays, dateToIso, isoToDate, isoWeekOf, todayIso, weekdayOf } from './lib/dates'
@@ -38,6 +38,15 @@ const dateLabelFormat = new Intl.DateTimeFormat('en-GB', {
 function formatDateLabel(iso: string): string {
   const [year, month, day] = iso.split('-').map(Number)
   return dateLabelFormat.format(new Date(Date.UTC(year, month - 1, day)))
+}
+
+// Strip the Foods-page targetDate from a prefill, leaving only the fields the
+// add-food modal understands. Returns undefined when there's nothing pending.
+function foodFieldsOf(prefill: FoodPrefill | null | undefined): Partial<NewFoodInput> | undefined {
+  if (!prefill) return undefined
+  const fields = { ...prefill }
+  delete fields.targetDate
+  return fields
 }
 
 /**
@@ -126,8 +135,10 @@ function WeightCard({
 
 type DashboardProps = {
   // When set, the add-food modal opens pre-filled with these macros (e.g. from
-  // the Foods page). onPrefillConsumed lets the parent clear it once handled.
-  prefill?: Partial<NewFoodInput> | null
+  // the Foods page). A targetDate, when present, moves the view to that day so
+  // the entry is logged there. onPrefillConsumed lets the parent clear it once
+  // handled.
+  prefill?: FoodPrefill | null
   onPrefillConsumed?: () => void
   // The day the app lands on (ISO `YYYY-MM-DD`). Defaults to the real current
   // date; injectable so tests can pin a known day instead of the live clock.
@@ -198,9 +209,24 @@ export function DashboardView({
     return () => document.removeEventListener('pointerdown', onPointerDown)
   }, [isCalendarOpen])
 
+  // A prefill arriving from the Foods page may target a specific day (the date
+  // picked there). Jump the view to it during render — the recommended way to
+  // adjust state from a changed prop — keyed on the prefill's identity so each
+  // fresh selection re-applies (even to the same day) but a steady prefill or a
+  // manual date change isn't overridden. The day then stays in view after submit.
+  const [seenPrefill, setSeenPrefill] = useState<FoodPrefill | null | undefined>(null)
+  if (prefill !== seenPrefill) {
+    setSeenPrefill(prefill)
+    if (prefill?.targetDate) setSelectedDate(prefill.targetDate)
+  }
+
   // The modal is open when opened via the FAB, when a pre-fill is pending (e.g.
   // a food was picked on the Foods page), or when an entry is being edited.
   const isModalOpen = isFabOpen || prefill != null || editingEntry != null
+
+  // The modal only knows NewFoodInput fields, so drop the Foods-page targetDate
+  // before seeding it; undefined when nothing is pending so the FAB opens blank.
+  const foodInitialValues = foodFieldsOf(prefill)
 
   // The fluid modal is open when opened via its FAB or when editing a drink.
   const isFluidModalOpen = isFluidFabOpen || editingFluid != null
@@ -495,7 +521,7 @@ export function DashboardView({
             editing
           />
         ) : (
-          <AddFoodModal onAdd={addFood} onClose={closeModal} initialValues={prefill ?? undefined} />
+          <AddFoodModal onAdd={addFood} onClose={closeModal} initialValues={foodInitialValues} />
         ))}
 
       {isFluidModalOpen &&
